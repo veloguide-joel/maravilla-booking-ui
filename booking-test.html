@@ -38,6 +38,8 @@
         <button id="mvSearchBtn" class="mv-btn mv-btn--primary" type="button">Check availability</button>
         <small>No payment required</small>
     </div>
+<div id="availabilityStatus" style="margin-top:8px;font-weight:bold;"></div>
+<div id="availabilityPrice" style="margin-top:4px;"></div>
 
     <div class="mv-subrow">
         <div id="mvMsg" class="mv-msg"></div>
@@ -45,6 +47,12 @@
             <button id="mvShowSaved" class="mv-btn mv-btn--ghost" type="button">Saved</button>
             <button id="mvShowAll" class="mv-btn mv-btn--ghost" type="button">Show all</button>
         </div>
+    </div>
+
+    <div class="mv-apartments" aria-live="polite">
+        <div class="mv-apartments__title">Apartments</div>
+        <div id="mvApartmentsStatus" class="mv-apartments__status"></div>
+        <ul id="mvApartmentsList" class="mv-apartments__list"></ul>
     </div>
 
     <div id="mvResults" class="mv-grid"></div>
@@ -166,6 +174,49 @@
         grid-template-columns: repeat(3, 1fr);
         gap: 16px;
         margin-top: 14px;
+    }
+    .mv-apartments{
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid #eee;
+        border-radius: 14px;
+        background: #fff;
+    }
+    .mv-apartments__title{
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+    .mv-apartments__status{
+        font-size: 12px;
+        opacity: .75;
+        margin-bottom: 6px;
+    }
+    .mv-apartments__list{
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+    }
+    .mv-apartments__list li{
+        padding: 6px 8px;
+        border: 1px solid #f0f0f0;
+        border-radius: 10px;
+        background: #fafafa;
+    }
+    .mv-apartments__group{
+        background: transparent;
+        border: 0;
+        padding: 6px 0 2px 0;
+        font-weight: 700;
+        opacity: .8;
+        pointer-events: none;
+    }
+    .mv-selected{
+        outline: 2px solid #ff385c;
+        outline-offset: 2px;
     }
     @media(max-width: 980px){
         .mv-search{ grid-template-columns: 1fr 1fr; }
@@ -375,6 +426,7 @@
         sameDayCheckin: false,
         favoritesKey: "mv_saved"
     };
+    const API_BASE = "https://maravilla-smoobu-proxy.vercel.app";
 
     const PROPERTIES = [
         {
@@ -419,12 +471,53 @@
     const $showAll = $("mvShowAll");
     const $modal = $("mvModal");
     const $modalContent = $("mvModalContent");
+    const $apartmentsStatus = $("mvApartmentsStatus");
+    const $apartmentsList = $("mvApartmentsList");
+    const $availabilityStatus = $("availabilityStatus");
+    const $availabilityPrice = $("availabilityPrice");
     let savedFilterActive = false;
     let currentList = PROPERTIES;
+    let selectedPropertyId = "";
 
     const getFavs = () => new Set(JSON.parse(localStorage.getItem(CONFIG.favoritesKey) || "[]").map(String));
     const setFavs = (set) => localStorage.setItem(CONFIG.favoritesKey, JSON.stringify([...set]));
     const fmtDate = (d) => d ? d : "—";
+
+    const getApartmentId = (apartment) => String(
+        apartment?.id ?? apartment?.apartmentId ?? apartment?.apartment_id ?? ""
+    );
+    const getParentPointer = (apartment) => {
+        const candidates = [
+            apartment?.parentId,
+            apartment?.parent_id,
+            apartment?.parentApartmentId,
+            apartment?.parent_apartment_id,
+            apartment?.parentPropertyId,
+            apartment?.parent_property_id,
+            apartment?.groupId,
+            apartment?.group_id,
+            apartment?.propertyGroupId,
+            apartment?.property_group_id
+        ];
+        const found = candidates.find((value) => value !== null && value !== undefined && value !== "");
+        return found == null ? "" : String(found);
+    };
+    const isParentApartment = (apartment) => Boolean(
+        apartment?.isParent ||
+        apartment?.is_parent ||
+        apartment?.isGroup ||
+        apartment?.is_group ||
+        apartment?.isParentProperty ||
+        apartment?.is_parent_property ||
+        (Array.isArray(apartment?.children) && apartment.children.length) ||
+        (Array.isArray(apartment?.units) && apartment.units.length)
+    );
+    const getParentKey = (apartment) => {
+        const parentPointer = getParentPointer(apartment);
+        if (parentPointer) return parentPointer;
+        if (isParentApartment(apartment)) return getApartmentId(apartment);
+        return "Ungrouped";
+    };
 
     const toSlug = (value) => String(value)
         .toLowerCase()
@@ -445,8 +538,10 @@
     }
 
     async function loadApartments() {
+        $apartmentsStatus.textContent = "Loading apartments...";
+        $apartmentsList.innerHTML = "";
         try {
-            const response = await fetch("https://maravilla-smoobu-proxy-eww2.vercel.app/api/smoobu/apartments", {
+            const response = await fetch("https://maravilla-smoobu-proxy.vercel.app/api/smoobu/apartments", {
                 method: "GET"
             });
             if (!response.ok) {
@@ -454,8 +549,58 @@
             }
             const data = await response.json();
             const apartments = Array.isArray(data?.apartments) ? data.apartments : [];
-            console.log("Smoobu apartments:", apartments);
+            console.log("apartments sample", apartments.slice(0,3));
+            console.log("apartment keys", Object.keys(apartments[0] || {}));
+            if (!data?.ok) {
+                throw new Error("Smoobu proxy returned ok=false");
+            }
+            if (!apartments.length) {
+                $apartmentsStatus.textContent = "No apartments returned.";
+                return;
+            }
+            const availabilityById = window.mvAvailabilityById || {};
+            const parentCandidates = apartments.filter((apartment) =>
+                apartments.some((other) => other !== apartment && other?.name?.startsWith(`${apartment.name} `))
+            );
+            const parentNames = new Set(parentCandidates.map((apartment) => apartment.name));
+            const groups = new Map();
+
+            apartments.forEach((apartment) => {
+                const name = apartment?.name || "";
+                if (parentNames.has(name)) return;
+                const parentMatch = parentCandidates.find((candidate) => name.startsWith(`${candidate.name} `));
+                const parentName = parentMatch ? parentMatch.name : "Other";
+                if (!groups.has(parentName)) groups.set(parentName, []);
+                const availability = availabilityById[getApartmentId(apartment)];
+                if (availability?.available === false) return;
+                groups.get(parentName).push(apartment);
+            });
+
+            const orderedParents = [...new Set(parentCandidates.map((apartment) => apartment.name))]
+                .sort((a, b) => a.localeCompare(b));
+            const otherChildren = groups.get("Other") || [];
+
+            const propertyCount = orderedParents.filter((name) => (groups.get(name) || []).length).length;
+            const unitCount = [...groups.values()].reduce((sum, children) => sum + children.length, 0);
+            $apartmentsStatus.textContent = `${propertyCount} properties • ${unitCount} units`;
+
+            $apartmentsList.innerHTML = orderedParents.map((parentName) => {
+                const children = groups.get(parentName) || [];
+                if (!children.length) return "";
+                const header = `<li class="mv-apartments__group">${parentName}</li>`;
+                const childItems = children.map((apartment) => {
+                    const id = getApartmentId(apartment);
+                    const name = apartment.name || `Apartment ${id}`;
+                    return `<li data-apartment-id="${id}">${name}</li>`;
+                }).join("");
+                return `${header}${childItems}`;
+            }).join("") + (otherChildren.length ? `<li class="mv-apartments__group">Other</li>${otherChildren.map((apartment) => {
+                const id = getApartmentId(apartment);
+                const name = apartment.name || `Apartment ${id}`;
+                return `<li data-apartment-id="${id}">${name}</li>`;
+            }).join("")}` : "");
         } catch (err) {
+            $apartmentsStatus.textContent = "Unable to load apartments right now.";
             console.error("Failed to load Smoobu apartments:", err);
         }
     }
@@ -494,10 +639,22 @@
         }
     }
 
+    function ensureSelectedPropertyId(list) {
+        if (!list.length) {
+            selectedPropertyId = "";
+            return;
+        }
+        const ids = new Set(list.map((p) => getPropertyId(p)));
+        if (!selectedPropertyId || !ids.has(selectedPropertyId)) {
+            selectedPropertyId = getPropertyId(list[0]);
+        }
+    }
+
     function renderCards(list) {
+        ensureSelectedPropertyId(list);
         const favs = getFavs();
         $results.innerHTML = list.map(p => `
-            <div class="mv-card" data-id="${p.id}" data-property-id="${getPropertyId(p)}">
+            <div class="mv-card" data-id="${p.id}" data-property-id="${getPropertyId(p)}" data-apartment-id="${p.id}">
                 <div class="mv-heart${favs.has(getPropertyId(p)) ? " is-saved" : ""}" data-heart="1" data-id="${p.id}" data-property-id="${getPropertyId(p)}" data-on="${favs.has(getPropertyId(p)) ? 1 : 0}">
                     ${favs.has(getPropertyId(p)) ? "♥" : "♡"}
                 </div>
@@ -577,8 +734,10 @@
             </div>
         `;
 
-        $("mvReserveBtn").addEventListener("click", () => {
-            window.open(p.url, "_blank", "noopener");
+        $("mvReserveBtn").addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            checkAvailability();
         });
 
         $modal.setAttribute("aria-hidden", "false");
@@ -588,22 +747,158 @@
         $modal.setAttribute("aria-hidden", "true");
     }
 
+    async function checkAvailability() {
+        const checkIn = $("mvCheckin").value;
+        const checkOut = $("mvCheckout").value;
+        const guests = $("mvGuests").value;
+        const apartmentId = window.mvSelectedApartmentId;
+
+        if (!apartmentId) {
+            $availabilityStatus.textContent = "Select an apartment first.";
+            $availabilityPrice.textContent = "";
+            return;
+        }
+        if (!checkIn || !checkOut) {
+            $availabilityStatus.textContent = "Select check-in and check-out dates.";
+            $availabilityPrice.textContent = "";
+            return;
+        }
+
+        $availabilityStatus.textContent = "Checking availability...";
+        $availabilityPrice.textContent = "";
+
+        try {
+            const params = new URLSearchParams({
+                apartmentId: String(apartmentId),
+                checkIn,
+                checkOut,
+                guests: String(guests),
+            });
+            console.log("[availability params]", { apartmentId, checkIn, checkOut, guests });
+            const response = await fetch(`https://maravilla-smoobu-proxy.vercel.app/api/smoobu/availability?${params.toString()}`);
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error("[availability error]", response.status, errText);
+                throw new Error(`Availability error: ${response.status}`);
+            }
+            const data = await response.json();
+            const available = data?.available ?? data?.isAvailable ?? data?.availability?.available;
+            const price = data?.price ?? data?.nightlyPrice ?? data?.availability?.price;
+
+            if (available === true) {
+                $availabilityStatus.textContent = "Available";
+            } else if (available === false) {
+                $availabilityStatus.textContent = "Unavailable";
+            } else {
+                $availabilityStatus.textContent = "Availability status unknown.";
+            }
+
+            if (price != null && price !== "") {
+                $availabilityPrice.textContent = `Nightly price: ${price}`;
+            }
+        } catch (err) {
+            $availabilityStatus.textContent = "Unable to check availability right now.";
+            $availabilityPrice.textContent = "";
+            console.error("Failed to check availability:", err);
+        }
+    }
+
     function runSearch() {
         const guests = parseInt($("mvGuests").value, 10);
         currentList = PROPERTIES.filter(p => p.sleeps >= guests);
         renderWithFilters();
     }
 
-    $searchBtn.addEventListener("click", () => {
+    $searchBtn.addEventListener("click", async () => {
         if ($searchBtn.disabled) return;
         const originalLabel = $searchBtn.textContent;
         $searchBtn.disabled = true;
-        $searchBtn.textContent = "Checking availability…";
+        $searchBtn.textContent = "Checking...";
         runSearch();
-        setTimeout(() => {
-            $searchBtn.disabled = false;
-            $searchBtn.textContent = originalLabel;
-        }, 700);
+
+        const checkIn = $("mvCheckin").value;
+        const checkOut = $("mvCheckout").value;
+        const guests = $("mvGuests").value;
+        const availabilityById = window.mvAvailabilityById || {};
+        window.mvAvailabilityById = availabilityById;
+        const cards = Array.from($results.querySelectorAll(".mv-card"));
+
+        for (const card of cards) {
+            const apartmentId = card.dataset.apartmentId;
+            if (!apartmentId) {
+                card.style.display = "none";
+                continue;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    apartmentId: String(apartmentId),
+                    checkIn,
+                    checkOut,
+                    guests: String(guests)
+                });
+                const resp = await fetch(`${API_BASE}/api/smoobu/availability?${params.toString()}`);
+                if (!resp.ok) {
+                    const errText = await resp.text();
+                    console.error("[availability error]", resp.status, errText);
+                    throw new Error(`Availability error: ${resp.status}`);
+                }
+                const data = await resp.json();
+                const available = data?.available ?? data?.isAvailable ?? data?.availability?.available;
+                const nightlyPrice = data?.nightlyPrice ?? data?.price ?? data?.availability?.price;
+
+                console.log("[availability result]", { apartmentId, available, nightlyPrice });
+                availabilityById[apartmentId] = { available, nightlyPrice };
+
+                if (available === true) {
+                    card.style.display = "";
+                    const subtitle = card.querySelector(".mv-card__meta span:last-child");
+                    if (subtitle) {
+                        const priceText = nightlyPrice != null && nightlyPrice !== "" ? nightlyPrice : "—";
+                        subtitle.textContent = `Nightly price: ${priceText}`;
+                    }
+                    const listItem = $apartmentsList.querySelector(`[data-apartment-id="${apartmentId}"]`);
+                    if (listItem) listItem.style.display = "";
+                } else {
+                    card.style.display = "none";
+                    const listItem = $apartmentsList.querySelector(`[data-apartment-id="${apartmentId}"]`);
+                    if (listItem) listItem.style.display = "none";
+                }
+            } catch (err) {
+                card.style.display = "none";
+                const listItem = $apartmentsList.querySelector(`[data-apartment-id="${apartmentId}"]`);
+                if (listItem) listItem.style.display = "none";
+                availabilityById[apartmentId] = { available: false };
+                console.error("Failed to check availability:", err);
+            }
+        }
+
+        cards.forEach((card) => {
+            const apartmentId = card.dataset.apartmentId;
+            const result = availabilityById[apartmentId];
+            if (result?.available === false) {
+                card.style.display = "none";
+            }
+            if (result?.available === true) {
+                card.style.display = "";
+            }
+        });
+
+        $apartmentsList.querySelectorAll(".mv-apartments__group").forEach((header) => {
+            let next = header.nextElementSibling;
+            let hasVisible = false;
+            while (next && !next.classList.contains("mv-apartments__group")) {
+                if (next.style.display !== "none") {
+                    hasVisible = true;
+                    break;
+                }
+                next = next.nextElementSibling;
+            }
+            header.style.display = hasVisible ? "" : "none";
+        });
+
+        $searchBtn.disabled = false;
+        $searchBtn.textContent = originalLabel;
     });
     $showSaved.addEventListener("click", () => {
         savedFilterActive = true;
@@ -621,6 +916,12 @@
     $("mvGuests").addEventListener("change", runSearch);
 
     $results.addEventListener("click", (e) => {
+        const innerAction = e.target.closest("button, a");
+        if (innerAction && e.target.closest(".mv-card")) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         const heart = e.target.closest("[data-heart]");
         if (heart) {
             e.preventDefault(); e.stopPropagation();
@@ -643,7 +944,21 @@
         if (!card) return;
         const id = String(card.dataset.propertyId || card.dataset.id);
         const p = PROPERTIES.find(x => getPropertyId(x) === id || String(x.id) === id);
-        if (p) openModal(p);
+        if (p) {
+            const apartmentId = card.dataset.apartmentId || p.id;
+            window.mvSelectedApartmentId = String(apartmentId);
+            document.querySelectorAll(".mv-selected").forEach((el) => el.classList.remove("mv-selected"));
+            card.classList.add("mv-selected");
+            openModal(p);
+        }
+    });
+
+    $apartmentsList.addEventListener("click", (e) => {
+        const item = e.target.closest("[data-apartment-id]");
+        if (!item) return;
+        window.mvSelectedApartmentId = String(item.dataset.apartmentId);
+        document.querySelectorAll(".mv-selected").forEach((el) => el.classList.remove("mv-selected"));
+        item.classList.add("mv-selected");
     });
 
     $modal.addEventListener("click", (e) => {
