@@ -3,6 +3,7 @@
 <head>
 	<meta charset="UTF-8" />
 	<title>Maravilla Admin — Holds</title>
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
 	<style>
 		body {
 			font-family: Arial, sans-serif;
@@ -52,23 +53,30 @@
 			white-space: pre-wrap;
 		}
 
-		.error {
-			margin-top: 16px;
-			padding: 10px 12px;
-			background: #ffe6e6;
-			border: 1px solid #d33;
-			border-radius: 6px;
-			color: #900;
+		.toast {
+			position: fixed;
+			top: 20px;
+			right: 20px;
+			background: #1f2937;
+			color: #fff;
+			padding: 10px 14px;
+			border-radius: 8px;
 			font-size: 13px;
+			box-shadow: 0 6px 18px rgba(0,0,0,0.18);
 			display: none;
+			z-index: 9999;
+		}
+
+		.toast--error {
+			background: #b91c1c;
 		}
 
 		.holds-section {
-			margin-top: 28px;
+			margin-top: 24px;
 		}
 
 		.holds-actions {
-			margin-top: 12px;
+			margin-top: 8px;
 		}
 
 		table {
@@ -80,7 +88,7 @@
 
 		th, td {
 			border: 1px solid #e2e6ea;
-			padding: 8px;
+			padding: 6px 8px;
 			text-align: left;
 			vertical-align: top;
 		}
@@ -98,22 +106,32 @@
 			cursor: pointer;
 			font-size: 12px;
 		}
+
+		.error {
+			margin-top: 16px;
+			padding: 10px 12px;
+			background: #ffe6e6;
+			border: 1px solid #d33;
+			border-radius: 6px;
+			color: #900;
+			font-size: 13px;
+			display: none;
+		}
 	</style>
 </head>
 <body>
 
 <div class="card">
 	<h1>Create Hold</h1>
-	<div class="error" id="error"></div>
 
 	<label>Apartment</label>
 	<select id="apartment"></select>
 
 	<label>Arrival Date</label>
-	<input type="date" id="arrival" />
+	<input type="text" id="arrival" />
 
 	<label>Departure Date</label>
-	<input type="date" id="departure" />
+	<input type="text" id="departure" />
 
 	<label>Hold Duration</label>
 	<select id="duration">
@@ -127,59 +145,237 @@
 
 	<button onclick="createHold()">Create Hold</button>
 
-	<div class="result" id="result"></div>
+	<div class="error" id="error"></div>
 
 	<div class="holds-section">
 		<h2>Active Holds</h2>
 		<div class="holds-actions">
-			<button class="small-button" onclick="loadActiveHolds()">Refresh Holds</button>
+			<button class="small-button" onclick="loadHoldsAndApply()">Refresh Holds</button>
 		</div>
-		<div class="result" id="holdsMessage"></div>
 		<div id="holdsTable"></div>
 	</div>
 </div>
 
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
 const API_BASE = "http://localhost:3001";
+let fpArrival;
+let fpDeparture;
+let blockedRanges = [];
+let currentHolds = [];
+let toastTimer = null;
 
-function showError(url, status, body) {
-	const errorBox = document.getElementById("error");
-	const bodyText = body ? JSON.stringify(body) : "No JSON body";
-	errorBox.textContent = `URL: ${url}\nStatus: ${status}\nError: ${bodyText}`;
-	errorBox.style.display = "block";
+function initDatePickers() {
+	fpArrival = flatpickr("#arrival", {
+		allowInput: false,
+		dateFormat: "Y-m-d"
+	});
+
+	fpDeparture = flatpickr("#departure", {
+		allowInput: false,
+		dateFormat: "Y-m-d"
+	});
 }
 
-function clearError() {
-	const errorBox = document.getElementById("error");
-	errorBox.style.display = "none";
-	errorBox.textContent = "";
+function applyBlockedRangesToPickers() {
+	console.log("[calendar] applying disable ranges:", blockedRanges);
+	if (fpArrival) {
+		fpArrival.set("disable", blockedRanges || []);
+		fpArrival.redraw();
+	}
+	if (fpDeparture) {
+		fpDeparture.set("disable", blockedRanges || []);
+		fpDeparture.redraw();
+	}
 }
 
-function formatDate(value) {
+function addDays(ymd, days) {
+	if (!ymd) {
+		return "";
+	}
+	const date = new Date(`${ymd}T00:00:00`);
+	if (Number.isNaN(date.getTime())) {
+		return "";
+	}
+	date.setDate(date.getDate() + days);
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+}
+
+function toYMD(value) {
 	if (!value) {
 		return "";
 	}
-	if (typeof value === "string") {
-		return value.slice(0, 10);
+	const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+	if (match) {
+		return `${match[1]}-${match[2]}-${match[3]}`;
 	}
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) {
 		return "";
 	}
-	return date.toISOString().slice(0, 10);
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
 }
 
-function setHoldsMessage(message) {
-	const messageBox = document.getElementById("holdsMessage");
-	messageBox.textContent = message || "";
+function isExpiredHold(h) {
+	if (!h) {
+		return false;
+	}
+	if (String(h.status || "").toLowerCase() !== "hold") {
+		return false;
+	}
+	if (!h.hold_expires_at) {
+		return false;
+	}
+	return new Date(h.hold_expires_at).getTime() <= Date.now();
+}
+
+function showToast(message, type) {
+	const toast = document.getElementById("toast");
+	toast.textContent = message;
+	toast.classList.toggle("toast--error", type === "error");
+	toast.style.display = "block";
+	if (toastTimer) {
+		clearTimeout(toastTimer);
+	}
+	toastTimer = setTimeout(() => {
+		toast.style.display = "none";
+	}, 5000);
+}
+
+function formatDateTime(value) {
+	if (!value) {
+		return "—";
+	}
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		return "—";
+	}
+	return date.toLocaleString();
+}
+
+function isActiveHoldStatus(status) {
+	const normalized = String(status || "").toLowerCase();
+	return normalized === "hold" || normalized === "confirmed";
+}
+
+function renderHoldsTable() {
+	const tableContainer = document.getElementById("holdsTable");
+	const unitId = document.getElementById("apartment").value;
+	const rows = (currentHolds || [])
+		.filter(h => h && String(h.unit_id) === String(unitId))
+		.filter(h => isActiveHoldStatus(h.status))
+		.filter(h => !isExpiredHold(h));
+
+	if (rows.length === 0) {
+		tableContainer.innerHTML = "<div class=\"result\">No active holds.</div>";
+		return;
+	}
+
+	const thead = "<thead><tr>" +
+		"<th>ID</th>" +
+		"<th>Property ID</th>" +
+		"<th>Unit ID</th>" +
+		"<th>Check-in</th>" +
+		"<th>Check-out</th>" +
+		"<th>Status</th>" +
+		"<th>Hold Expires</th>" +
+		"<th>Action</th>" +
+		"</tr></thead>";
+
+	const tbody = rows.map(h => {
+		const id = String(h.id || "");
+		const shortId = id ? id.slice(0, 8) : "";
+		const propertyId = h.property_id || h.propertyId || "";
+		const unit = h.unit_id || h.unitId || "";
+		const checkIn = toYMD(h.check_in || h.checkIn || h.from || "");
+		const checkOut = toYMD(h.check_out || h.checkOut || h.to || "");
+		const status = h.status || "";
+		const expires = h.hold_expires_at ? formatDateTime(h.hold_expires_at) : "—";
+		const safeId = String(id).replace(/"/g, "&quot;");
+
+		return (
+			"<tr>" +
+			`<td>${shortId}</td>` +
+			`<td>${propertyId}</td>` +
+			`<td>${unit}</td>` +
+			`<td>${checkIn}</td>` +
+			`<td>${checkOut}</td>` +
+			`<td>${status}</td>` +
+			`<td>${expires}</td>` +
+			`<td><button class=\"small-button\" onclick=\"releaseHold('${safeId}')\">Release</button></td>` +
+			"</tr>"
+		);
+	}).join("");
+
+	tableContainer.innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
+}
+
+function buildDisableRanges(holds, propertyId, unitId) {
+	const ranges = [];
+	(holds || []).forEach(h => {
+		if (!h) {
+			return;
+		}
+		if (isExpiredHold(h)) {
+			return;
+		}
+		const holdUnit = h.unit_id ?? h.unitId ?? h.unit;
+		if (String(holdUnit) !== String(unitId)) {
+			return;
+		}
+		const startYmd = toYMD(h.check_in);
+		const endYmdExclusive = toYMD(h.check_out);
+		if (!startYmd || !endYmdExclusive) {
+			return;
+		}
+		const endInclusive = addDays(endYmdExclusive, -1);
+		if (!endInclusive || endInclusive < startYmd) {
+			return;
+		}
+		ranges.push({ from: startYmd, to: endInclusive });
+	});
+	return ranges;
+}
+
+async function loadHoldsAndApply() {
+	const unitId = document.getElementById("apartment").value;
+	if (!unitId) {
+		blockedRanges = [];
+		applyBlockedRangesToPickers();
+		return;
+	}
+	try {
+		const res = await fetch(`${API_BASE}/api/holds/active`);
+		const data = await res.json();
+		const holds = data && Array.isArray(data.holds) ? data.holds : [];
+		console.log("[holds] fetched count:", holds.length, holds[0]);
+		const selectedPropertyId = unitId;
+		const selectedUnitId = unitId;
+		currentHolds = holds;
+		blockedRanges = buildDisableRanges(holds, selectedPropertyId, selectedUnitId);
+		console.log("[calendar] computed blockedRanges:", blockedRanges);
+		applyBlockedRangesToPickers();
+		renderHoldsTable();
+	} catch (error) {
+		console.error("Failed to refresh blocked ranges", error);
+	}
 }
 
 async function loadApartments() {
-	clearError();
-	const url = `${API_BASE}/api/smoobu/apartments`;
+	const errorBox = document.getElementById("error");
+	errorBox.style.display = "none";
+	errorBox.textContent = "";
 
 	try {
-		const res = await fetch(url);
+		const res = await fetch(`${API_BASE}/api/smoobu/apartments`);
 		let data = null;
 
 		try {
@@ -188,9 +384,9 @@ async function loadApartments() {
 			data = null;
 		}
 
-		if (!res.ok || !data || data.ok !== true || !Array.isArray(data.apartments)) {
-			showError(url, `${res.status} ${res.statusText}`.trim(), data);
-			return;
+		if (!res.ok) {
+			const details = data ? JSON.stringify(data) : "No JSON body";
+			throw new Error(`HTTP ${res.status} ${res.statusText} - ${details}`);
 		}
 
 		const select = document.getElementById("apartment");
@@ -205,174 +401,79 @@ async function loadApartments() {
 				select.appendChild(option);
 			});
 	} catch (error) {
-		showError(url, "NETWORK_ERROR", { message: error.message });
+		errorBox.textContent = `Failed to load apartments: ${error.message}`;
+		errorBox.style.display = "block";
 	}
 }
 
 async function createHold() {
-	clearError();
-	setHoldsMessage("");
-	const apartmentIdValue = document.getElementById("apartment").value;
-	const arrival = document.getElementById("arrival").value;
-	const departure = document.getElementById("departure").value;
-	const url = `${API_BASE}/api/holds/create`;
+	const selectedUnitId = document.getElementById("apartment").value;
+	const selectedPropertyId = selectedUnitId;
+	const arrival = toYMD(document.getElementById("arrival").value);
+	const departure = toYMD(document.getElementById("departure").value);
 
-	if (!apartmentIdValue || !arrival || !departure) {
-		showError(url, "MISSING_FIELDS", {
-			message: "Apartment, arrival, and departure are required."
-		});
+	if (!selectedUnitId || !arrival || !departure) {
+		showToast("Pick apartment and dates first", "error");
 		return;
 	}
 
-	const propertyId = parseInt(apartmentIdValue, 10);
-	const unitId = propertyId;
+	const res = await fetch(`${API_BASE}/api/holds/create`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			propertyId: selectedPropertyId,
+			unitId: selectedUnitId,
+			from: arrival,
+			to: departure
+		})
+	});
 
-	try {
-		const res = await fetch(url, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				propertyId,
-				unitId,
-				from: arrival,
-				to: departure
-			})
-		});
-
-		let data = null;
-		try {
-			data = await res.json();
-		} catch (parseError) {
-			data = null;
-		}
-
-		if (!res.ok) {
-			showError(url, `${res.status} ${res.statusText}`.trim(), data);
-			return;
-		}
-
-		document.getElementById("result").textContent =
-			JSON.stringify(data, null, 2);
-	} catch (error) {
-		showError(url, "NETWORK_ERROR", { message: error.message });
-	}
-}
-
-async function loadActiveHolds() {
-	clearError();
-	setHoldsMessage("Loading active holds...");
-	const tableContainer = document.getElementById("holdsTable");
-	const url = `${API_BASE}/api/holds/active`;
-	const headers = [
-		"ID",
-		"Property ID",
-		"Unit ID",
-		"Check-in",
-		"Check-out",
-		"Guests",
-		"Status",
-		"Hold Expires",
-		"Action"
-	];
-
-	try {
-		const res = await fetch(url);
-		let data = null;
-
-		try {
-			data = await res.json();
-		} catch (parseError) {
-			data = null;
-		}
-
-		if (!res.ok) {
-			showError(url, `${res.status} ${res.statusText}`.trim(), data);
-			setHoldsMessage("");
-			return;
-		}
-
-		const holds = Array.isArray(data) ? data : (data && Array.isArray(data.holds) ? data.holds : []);
-
-		if (holds.length === 0) {
-			tableContainer.innerHTML = "";
-			setHoldsMessage("No active holds.");
-			return;
-		}
-
-		const thead = "<thead><tr>" + headers.map(label => `<th>${label}</th>`).join("") + "</tr></thead>";
-		const tbody = holds.map(hold => {
-			const id = hold.id ?? hold.holdId ?? "";
-			const propertyId = hold.propertyId ?? hold.property_id ?? hold.property;
-			const unitId = hold.unitId ?? hold.unit_id ?? hold.unit;
-			const checkIn = formatDate(hold.from || hold.checkIn || hold.check_in);
-			const checkOut = formatDate(hold.to || hold.checkOut || hold.check_out);
-			const guests = hold.guests ?? hold.guestCount ?? "";
-			const status = hold.status || "";
-			const expiresAt = formatDate(hold.expiresAt || hold.holdExpiresAt || hold.expires_at);
-			const safeId = String(id).replace(/"/g, "&quot;");
-
-			return (
-				"<tr>" +
-				`<td>${id}</td>` +
-				`<td>${propertyId ?? ""}</td>` +
-				`<td>${unitId ?? ""}</td>` +
-				`<td>${checkIn}</td>` +
-				`<td>${checkOut}</td>` +
-				`<td>${guests}</td>` +
-				`<td>${status}</td>` +
-				`<td>${expiresAt}</td>` +
-				`<td><button class="small-button" onclick="releaseHold(\"${safeId}\")">Release</button></td>` +
-				"</tr>"
-			);
-		}).join("");
-
-		tableContainer.innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
-		setHoldsMessage("");
-	} catch (error) {
-		showError(url, "NETWORK_ERROR", { message: error.message });
-		setHoldsMessage("");
+	const data = await res.json();
+	if (res.ok) {
+		showToast("Hold created", "success");
+		await loadHoldsAndApply();
+		applyBlockedRangesToPickers();
+	} else {
+		const message = data && (data.message || data.error) ? (data.message || data.error) : "Request failed";
+		showToast(`Create failed: ${message}`, "error");
 	}
 }
 
 async function releaseHold(id) {
-	if (!confirm("Release this hold?")) {
-		return;
-	}
-
-	clearError();
-	setHoldsMessage("Releasing hold...");
-	const url = `${API_BASE}/api/holds/release`;
-
 	try {
-		const res = await fetch(url, {
+		const res = await fetch(`${API_BASE}/api/holds/release`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ id })
 		});
-
 		let data = null;
 		try {
 			data = await res.json();
 		} catch (parseError) {
 			data = null;
 		}
-
 		if (!res.ok) {
-			showError(url, `${res.status} ${res.statusText}`.trim(), data);
-			setHoldsMessage("");
+			const message = data && (data.message || data.error) ? (data.message || data.error) : "Request failed";
+			showToast(`Release failed: ${message}`, "error");
 			return;
 		}
-
-		setHoldsMessage("Hold released.");
-		await loadActiveHolds();
+		showToast("Hold released", "success");
+		await loadHoldsAndApply();
+		applyBlockedRangesToPickers();
 	} catch (error) {
-		showError(url, "NETWORK_ERROR", { message: error.message });
-		setHoldsMessage("");
+		showToast("Release failed: Network error", "error");
 	}
 }
 
-loadApartments();
-loadActiveHolds();
+document.addEventListener("DOMContentLoaded", () => {
+	initDatePickers();
+	applyBlockedRangesToPickers();
+	loadApartments();
+	loadHoldsAndApply();
+	document.getElementById("apartment").addEventListener("change", () => {
+		loadHoldsAndApply();
+	});
+});
 </script>
 
 </body>
