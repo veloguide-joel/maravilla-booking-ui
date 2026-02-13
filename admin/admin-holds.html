@@ -44,15 +44,6 @@
 			cursor: pointer;
 		}
 
-		.result {
-			margin-top: 20px;
-			padding: 12px;
-			background: #eef2f7;
-			border-radius: 6px;
-			font-size: 14px;
-			white-space: pre-wrap;
-		}
-
 		.toast {
 			position: fixed;
 			top: 20px;
@@ -107,16 +98,7 @@
 			font-size: 12px;
 		}
 
-		.error {
-			margin-top: 16px;
-			padding: 10px 12px;
-			background: #ffe6e6;
-			border: 1px solid #d33;
-			border-radius: 6px;
-			color: #900;
-			font-size: 13px;
-			display: none;
-		}
+
 	</style>
 </head>
 <body>
@@ -145,14 +127,27 @@
 
 	<button onclick="createHold()">Create Hold</button>
 
-	<div class="error" id="error"></div>
-
 	<div class="holds-section">
 		<h2>Active Holds</h2>
-		<div class="holds-actions">
-			<button class="small-button" onclick="loadHoldsAndApply()">Refresh Holds</button>
-		</div>
-		<div id="holdsTable"></div>
+		<table>
+			<thead>
+				<tr>
+					<th>ID</th>
+					<th>Property ID</th>
+					<th>Unit ID</th>
+					<th>Check-in</th>
+					<th>Check-out</th>
+					<th>Status</th>
+					<th>Hold Expires</th>
+					<th>Action</th>
+				</tr>
+			</thead>
+			<tbody id="holdsTbody">
+				<tr>
+					<td colspan="8">No active holds.</td>
+				</tr>
+			</tbody>
+		</table>
 	</div>
 </div>
 
@@ -191,15 +186,18 @@ function applyBlockedRangesToPickers() {
 	}
 }
 
-function addDays(ymd, days) {
-	if (!ymd) {
+function addDays(value, days) {
+	if (!value) {
 		return "";
 	}
-	const date = new Date(`${ymd}T00:00:00`);
+	const date = value instanceof Date ? new Date(value.getTime()) : new Date(`${value}T00:00:00`);
 	if (Number.isNaN(date.getTime())) {
 		return "";
 	}
 	date.setDate(date.getDate() + days);
+	if (value instanceof Date) {
+		return date;
+	}
 	const year = date.getFullYear();
 	const month = String(date.getMonth() + 1).padStart(2, "0");
 	const day = String(date.getDate()).padStart(2, "0");
@@ -237,7 +235,7 @@ function isExpiredHold(h) {
 	return new Date(h.hold_expires_at).getTime() <= Date.now();
 }
 
-function showToast(message, type) {
+function showToast(message, type = "success") {
 	const toast = document.getElementById("toast");
 	toast.textContent = message;
 	toast.classList.toggle("toast--error", type === "error");
@@ -267,7 +265,7 @@ function isActiveHoldStatus(status) {
 }
 
 function renderHoldsTable() {
-	const tableContainer = document.getElementById("holdsTable");
+	const tbody = document.getElementById("holdsTbody");
 	const unitId = document.getElementById("apartment").value;
 	const rows = (currentHolds || [])
 		.filter(h => h && String(h.unit_id) === String(unitId))
@@ -275,22 +273,11 @@ function renderHoldsTable() {
 		.filter(h => !isExpiredHold(h));
 
 	if (rows.length === 0) {
-		tableContainer.innerHTML = "<div class=\"result\">No active holds.</div>";
+		tbody.innerHTML = "<tr><td colspan=\"8\">No active holds.</td></tr>";
 		return;
 	}
 
-	const thead = "<thead><tr>" +
-		"<th>ID</th>" +
-		"<th>Property ID</th>" +
-		"<th>Unit ID</th>" +
-		"<th>Check-in</th>" +
-		"<th>Check-out</th>" +
-		"<th>Status</th>" +
-		"<th>Hold Expires</th>" +
-		"<th>Action</th>" +
-		"</tr></thead>";
-
-	const tbody = rows.map(h => {
+	const rowsHtml = rows.map(h => {
 		const id = String(h.id || "");
 		const shortId = id ? id.slice(0, 8) : "";
 		const propertyId = h.property_id || h.propertyId || "";
@@ -315,7 +302,13 @@ function renderHoldsTable() {
 		);
 	}).join("");
 
-	tableContainer.innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
+	tbody.innerHTML = rowsHtml;
+}
+
+function setTableLoading(message) {
+	const tbody = document.getElementById("holdsTbody");
+	const text = message || "Loading holds...";
+	tbody.innerHTML = `<tr><td colspan="8">${text}</td></tr>`;
 }
 
 function buildDisableRanges(holds, propertyId, unitId) {
@@ -345,6 +338,28 @@ function buildDisableRanges(holds, propertyId, unitId) {
 	return ranges;
 }
 
+function getNextBlockedStart(afterDate, unitId) {
+	let nextStart = null;
+	const afterTime = afterDate.getTime();
+	(blockedRanges || []).forEach(range => {
+		const startValue = range.from || range.check_in;
+		if (!startValue) {
+			return;
+		}
+		const startDate = new Date(`${toYMD(startValue)}T00:00:00`);
+		if (Number.isNaN(startDate.getTime())) {
+			return;
+		}
+		if (startDate.getTime() <= afterTime) {
+			return;
+		}
+		if (!nextStart || startDate.getTime() < nextStart.getTime()) {
+			nextStart = startDate;
+		}
+	});
+	return nextStart;
+}
+
 async function loadHoldsAndApply() {
 	const unitId = document.getElementById("apartment").value;
 	if (!unitId) {
@@ -352,11 +367,16 @@ async function loadHoldsAndApply() {
 		applyBlockedRangesToPickers();
 		return;
 	}
+	setTableLoading("Loading holds...");
 	try {
 		const res = await fetch(`${API_BASE}/api/holds/active`);
+		if (!res.ok) {
+			showToast(`Error: ${res.status} ${res.statusText}`.trim(), "error");
+			return;
+		}
 		const data = await res.json();
 		const holds = data && Array.isArray(data.holds) ? data.holds : [];
-		console.log("[holds] fetched count:", holds.length, holds[0]);
+		console.log("[holds] fetched count:", holds.length);
 		const selectedPropertyId = unitId;
 		const selectedUnitId = unitId;
 		currentHolds = holds;
@@ -365,15 +385,17 @@ async function loadHoldsAndApply() {
 		applyBlockedRangesToPickers();
 		renderHoldsTable();
 	} catch (error) {
-		console.error("Failed to refresh blocked ranges", error);
+		console.error("[holds] fetch failed:", error);
+		showToast("Error: Failed to load holds", "error");
 	}
 }
 
-async function loadApartments() {
-	const errorBox = document.getElementById("error");
-	errorBox.style.display = "none";
-	errorBox.textContent = "";
+async function refreshHoldsAndCalendar() {
+	console.log("[holds] auto-refresh triggered");
+	await loadHoldsAndApply();
+}
 
+async function loadApartments() {
 	try {
 		const res = await fetch(`${API_BASE}/api/smoobu/apartments`);
 		let data = null;
@@ -385,8 +407,8 @@ async function loadApartments() {
 		}
 
 		if (!res.ok) {
-			const details = data ? JSON.stringify(data) : "No JSON body";
-			throw new Error(`HTTP ${res.status} ${res.statusText} - ${details}`);
+			showToast(`Error: ${res.status} ${res.statusText}`.trim(), "error");
+			return;
 		}
 
 		const select = document.getElementById("apartment");
@@ -400,9 +422,12 @@ async function loadApartments() {
 				option.textContent = a.name;
 				select.appendChild(option);
 			});
+
+		if (!select.value && select.options.length > 0) {
+			select.value = select.options[0].value;
+		}
 	} catch (error) {
-		errorBox.textContent = `Failed to load apartments: ${error.message}`;
-		errorBox.style.display = "block";
+		showToast("Error: Failed to load apartments", "error");
 	}
 }
 
@@ -430,12 +455,12 @@ async function createHold() {
 
 	const data = await res.json();
 	if (res.ok) {
-		showToast("Hold created", "success");
-		await loadHoldsAndApply();
+		showToast("Hold created.", "success");
+		await refreshHoldsAndCalendar();
 		applyBlockedRangesToPickers();
 	} else {
 		const message = data && (data.message || data.error) ? (data.message || data.error) : "Request failed";
-		showToast(`Create failed: ${message}`, "error");
+		showToast(`Error: ${message}`, "error");
 	}
 }
 
@@ -454,24 +479,65 @@ async function releaseHold(id) {
 		}
 		if (!res.ok) {
 			const message = data && (data.message || data.error) ? (data.message || data.error) : "Request failed";
-			showToast(`Release failed: ${message}`, "error");
+			showToast(`Error: ${message}`, "error");
 			return;
 		}
-		showToast("Hold released", "success");
-		await loadHoldsAndApply();
+		showToast("Hold released.", "success");
+		await refreshHoldsAndCalendar();
 		applyBlockedRangesToPickers();
 	} catch (error) {
-		showToast("Release failed: Network error", "error");
+		showToast("Error: Network error", "error");
 	}
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-	initDatePickers();
-	applyBlockedRangesToPickers();
-	loadApartments();
-	loadHoldsAndApply();
+	const init = async () => {
+		initDatePickers();
+		applyBlockedRangesToPickers();
+		await loadApartments();
+		await refreshHoldsAndCalendar();
+	};
+	init();
+	const departureInput = document.getElementById("departure");
+	departureInput.addEventListener("focus", () => {
+		if (departureInput.value) {
+			return;
+		}
+		const arrivalValue = toYMD(document.getElementById("arrival").value);
+		if (!arrivalValue) {
+			return;
+		}
+		const arrivalDate = new Date(`${arrivalValue}T00:00:00`);
+		if (Number.isNaN(arrivalDate.getTime())) {
+			return;
+		}
+		const minDeparture = addDays(arrivalDate, 1);
+		const targetFromArrival = addDays(arrivalDate, 7);
+		const nextBlockedStart = getNextBlockedStart(arrivalDate, document.getElementById("apartment").value);
+		let candidate = targetFromArrival;
+		if (nextBlockedStart) {
+			const lastAvailable = addDays(nextBlockedStart, -1);
+			candidate = candidate > lastAvailable ? lastAvailable : candidate;
+		}
+		if (candidate <= arrivalDate) {
+			candidate = minDeparture;
+		}
+		const candidateYmd = toYMD(candidate);
+		if (!candidateYmd) {
+			return;
+		}
+		console.log("[departure-default] computed", candidateYmd);
+		if (fpDeparture) {
+			fpDeparture.setDate(candidateYmd, true);
+		} else {
+			departureInput.value = candidateYmd;
+		}
+	});
+	departureInput.addEventListener("click", () => {
+		departureInput.dispatchEvent(new Event("focus"));
+	});
 	document.getElementById("apartment").addEventListener("change", () => {
-		loadHoldsAndApply();
+		refreshHoldsAndCalendar();
 	});
 });
 </script>
