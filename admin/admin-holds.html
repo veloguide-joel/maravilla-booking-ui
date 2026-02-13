@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8" />
+	<title>Maravilla Admin — Holds</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			padding: 40px;
+			background: #f4f6f8;
+		}
+
+		.card {
+			background: white;
+			padding: 24px;
+			border-radius: 8px;
+			max-width: 600px;
+			box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+		}
+
+		h1 {
+			margin-top: 0;
+		}
+
+		label {
+			display: block;
+			margin-top: 16px;
+			font-weight: bold;
+		}
+
+		select, input {
+			width: 100%;
+			padding: 8px;
+			margin-top: 6px;
+		}
+
+		button {
+			margin-top: 20px;
+			padding: 10px 16px;
+			background: black;
+			color: white;
+			border: none;
+			cursor: pointer;
+		}
+
+		.result {
+			margin-top: 20px;
+			padding: 12px;
+			background: #eef2f7;
+			border-radius: 6px;
+			font-size: 14px;
+			white-space: pre-wrap;
+		}
+
+		.error {
+			margin-top: 16px;
+			padding: 10px 12px;
+			background: #ffe6e6;
+			border: 1px solid #d33;
+			border-radius: 6px;
+			color: #900;
+			font-size: 13px;
+			display: none;
+		}
+
+		.holds-section {
+			margin-top: 28px;
+		}
+
+		.holds-actions {
+			margin-top: 12px;
+		}
+
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			margin-top: 12px;
+			font-size: 13px;
+		}
+
+		th, td {
+			border: 1px solid #e2e6ea;
+			padding: 8px;
+			text-align: left;
+			vertical-align: top;
+		}
+
+		th {
+			background: #f0f3f6;
+			font-weight: bold;
+		}
+
+		.small-button {
+			padding: 6px 10px;
+			background: #222;
+			color: #fff;
+			border: none;
+			cursor: pointer;
+			font-size: 12px;
+		}
+	</style>
+</head>
+<body>
+
+<div class="card">
+	<h1>Create Hold</h1>
+	<div class="error" id="error"></div>
+
+	<label>Apartment</label>
+	<select id="apartment"></select>
+
+	<label>Arrival Date</label>
+	<input type="date" id="arrival" />
+
+	<label>Departure Date</label>
+	<input type="date" id="departure" />
+
+	<label>Hold Duration</label>
+	<select id="duration">
+		<option value="manual">Manual (no expiry)</option>
+		<option value="1">1 day</option>
+		<option value="2">2 days</option>
+		<option value="3">3 days</option>
+		<option value="4">4 days</option>
+		<option value="5">5 days</option>
+	</select>
+
+	<button onclick="createHold()">Create Hold</button>
+
+	<div class="result" id="result"></div>
+
+	<div class="holds-section">
+		<h2>Active Holds</h2>
+		<div class="holds-actions">
+			<button class="small-button" onclick="loadActiveHolds()">Refresh Holds</button>
+		</div>
+		<div class="result" id="holdsMessage"></div>
+		<div id="holdsTable"></div>
+	</div>
+</div>
+
+<script>
+const API_BASE = "http://localhost:3001";
+
+function showError(url, status, body) {
+	const errorBox = document.getElementById("error");
+	const bodyText = body ? JSON.stringify(body) : "No JSON body";
+	errorBox.textContent = `URL: ${url}\nStatus: ${status}\nError: ${bodyText}`;
+	errorBox.style.display = "block";
+}
+
+function clearError() {
+	const errorBox = document.getElementById("error");
+	errorBox.style.display = "none";
+	errorBox.textContent = "";
+}
+
+function formatDate(value) {
+	if (!value) {
+		return "";
+	}
+	if (typeof value === "string") {
+		return value.slice(0, 10);
+	}
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		return "";
+	}
+	return date.toISOString().slice(0, 10);
+}
+
+function setHoldsMessage(message) {
+	const messageBox = document.getElementById("holdsMessage");
+	messageBox.textContent = message || "";
+}
+
+async function loadApartments() {
+	clearError();
+	const url = `${API_BASE}/api/smoobu/apartments`;
+
+	try {
+		const res = await fetch(url);
+		let data = null;
+
+		try {
+			data = await res.json();
+		} catch (parseError) {
+			data = null;
+		}
+
+		if (!res.ok || !data || data.ok !== true || !Array.isArray(data.apartments)) {
+			showError(url, `${res.status} ${res.statusText}`.trim(), data);
+			return;
+		}
+
+		const select = document.getElementById("apartment");
+		select.innerHTML = "";
+
+		data.apartments
+			.filter(a => !a.name.includes("Casa Victoria") || a.name.includes("Villa"))
+			.forEach(a => {
+				const option = document.createElement("option");
+				option.value = a.id;
+				option.textContent = a.name;
+				select.appendChild(option);
+			});
+	} catch (error) {
+		showError(url, "NETWORK_ERROR", { message: error.message });
+	}
+}
+
+async function createHold() {
+	clearError();
+	setHoldsMessage("");
+	const apartmentIdValue = document.getElementById("apartment").value;
+	const arrival = document.getElementById("arrival").value;
+	const departure = document.getElementById("departure").value;
+	const url = `${API_BASE}/api/holds/create`;
+
+	if (!apartmentIdValue || !arrival || !departure) {
+		showError(url, "MISSING_FIELDS", {
+			message: "Apartment, arrival, and departure are required."
+		});
+		return;
+	}
+
+	const propertyId = parseInt(apartmentIdValue, 10);
+	const unitId = propertyId;
+
+	try {
+		const res = await fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				propertyId,
+				unitId,
+				from: arrival,
+				to: departure
+			})
+		});
+
+		let data = null;
+		try {
+			data = await res.json();
+		} catch (parseError) {
+			data = null;
+		}
+
+		if (!res.ok) {
+			showError(url, `${res.status} ${res.statusText}`.trim(), data);
+			return;
+		}
+
+		document.getElementById("result").textContent =
+			JSON.stringify(data, null, 2);
+	} catch (error) {
+		showError(url, "NETWORK_ERROR", { message: error.message });
+	}
+}
+
+async function loadActiveHolds() {
+	clearError();
+	setHoldsMessage("Loading active holds...");
+	const tableContainer = document.getElementById("holdsTable");
+	const url = `${API_BASE}/api/holds/active`;
+	const headers = [
+		"ID",
+		"Property ID",
+		"Unit ID",
+		"Check-in",
+		"Check-out",
+		"Guests",
+		"Status",
+		"Hold Expires",
+		"Action"
+	];
+
+	try {
+		const res = await fetch(url);
+		let data = null;
+
+		try {
+			data = await res.json();
+		} catch (parseError) {
+			data = null;
+		}
+
+		if (!res.ok) {
+			showError(url, `${res.status} ${res.statusText}`.trim(), data);
+			setHoldsMessage("");
+			return;
+		}
+
+		const holds = Array.isArray(data) ? data : (data && Array.isArray(data.holds) ? data.holds : []);
+
+		if (holds.length === 0) {
+			tableContainer.innerHTML = "";
+			setHoldsMessage("No active holds.");
+			return;
+		}
+
+		const thead = "<thead><tr>" + headers.map(label => `<th>${label}</th>`).join("") + "</tr></thead>";
+		const tbody = holds.map(hold => {
+			const id = hold.id ?? hold.holdId ?? "";
+			const propertyId = hold.propertyId ?? hold.property_id ?? hold.property;
+			const unitId = hold.unitId ?? hold.unit_id ?? hold.unit;
+			const checkIn = formatDate(hold.from || hold.checkIn || hold.check_in);
+			const checkOut = formatDate(hold.to || hold.checkOut || hold.check_out);
+			const guests = hold.guests ?? hold.guestCount ?? "";
+			const status = hold.status || "";
+			const expiresAt = formatDate(hold.expiresAt || hold.holdExpiresAt || hold.expires_at);
+			const safeId = String(id).replace(/"/g, "&quot;");
+
+			return (
+				"<tr>" +
+				`<td>${id}</td>` +
+				`<td>${propertyId ?? ""}</td>` +
+				`<td>${unitId ?? ""}</td>` +
+				`<td>${checkIn}</td>` +
+				`<td>${checkOut}</td>` +
+				`<td>${guests}</td>` +
+				`<td>${status}</td>` +
+				`<td>${expiresAt}</td>` +
+				`<td><button class="small-button" onclick="releaseHold(\"${safeId}\")">Release</button></td>` +
+				"</tr>"
+			);
+		}).join("");
+
+		tableContainer.innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
+		setHoldsMessage("");
+	} catch (error) {
+		showError(url, "NETWORK_ERROR", { message: error.message });
+		setHoldsMessage("");
+	}
+}
+
+async function releaseHold(id) {
+	if (!confirm("Release this hold?")) {
+		return;
+	}
+
+	clearError();
+	setHoldsMessage("Releasing hold...");
+	const url = `${API_BASE}/api/holds/release`;
+
+	try {
+		const res = await fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ id })
+		});
+
+		let data = null;
+		try {
+			data = await res.json();
+		} catch (parseError) {
+			data = null;
+		}
+
+		if (!res.ok) {
+			showError(url, `${res.status} ${res.statusText}`.trim(), data);
+			setHoldsMessage("");
+			return;
+		}
+
+		setHoldsMessage("Hold released.");
+		await loadActiveHolds();
+	} catch (error) {
+		showError(url, "NETWORK_ERROR", { message: error.message });
+		setHoldsMessage("");
+	}
+}
+
+loadApartments();
+loadActiveHolds();
+</script>
+
+</body>
+</html>

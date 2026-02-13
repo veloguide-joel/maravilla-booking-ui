@@ -11,14 +11,22 @@
 
 <div id="mv-app" class="mv-app">
     <div class="mv-search">
-        <div class="mv-field">
+        <div class="mv-field mv-field--hidden">
             <label>Check-in</label>
             <input id="mvCheckin" type="date" />
         </div>
 
-        <div class="mv-field">
+        <div class="mv-field mv-field--hidden">
             <label>Check-out</label>
             <input id="mvCheckout" type="date" />
+        </div>
+
+        <div class="mv-field">
+            <label>Dates</label>
+            <div class="mv-date-wrapper">
+                <button id="mvDatesBtn" class="mv-date-display" type="button">Add dates</button>
+                <button id="mvDatesClear" class="mv-date-clear" type="button" aria-label="Clear dates">×</button>
+            </div>
         </div>
 
         <div class="mv-field">
@@ -36,7 +44,6 @@
         </div>
 
         <button id="mvSearchBtn" class="mv-btn mv-btn--primary" type="button">Check availability</button>
-        <small>No payment required</small>
     </div>
 <div id="availabilityStatus" style="margin-top:8px;font-weight:bold;"></div>
 <div id="availabilityPrice" style="margin-top:4px;"></div>
@@ -63,6 +70,17 @@
     <div class="mv-modal__panel" role="dialog" aria-modal="true" aria-label="Property details">
         <button class="mv-modal__close" data-close="1" aria-label="Done" type="button">✕</button>
         <div id="mvModalContent"></div>
+    </div>
+</div>
+
+<div id="mvCalendarModal" class="mv-calendar" aria-hidden="true">
+    <div class="mv-calendar__backdrop" data-cal-close="1"></div>
+    <div class="mv-calendar__panel" role="dialog" aria-modal="true" aria-label="Select dates">
+        <div class="mv-calendar__header">
+            <div>Select dates</div>
+            <button id="mvCalendarClose" class="mv-calendar__close" type="button" aria-label="Close">✕</button>
+        </div>
+        <div id="mvCalendarMonths" class="mv-calendar__months"></div>
     </div>
 </div>
 
@@ -101,6 +119,36 @@
         outline: none;
         background:#fff;
     }
+    .mv-field--hidden{
+        display: none;
+    }
+    .mv-date-display{
+        width:100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 14px;
+        background:#fff;
+        text-align: left;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .mv-date-wrapper{
+        position: relative;
+    }
+    .mv-date-clear{
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 0;
+        background: transparent;
+        color: #888;
+        font-size: 16px;
+        cursor: pointer;
+        padding: 2px 4px;
+        display: none;
+    }
+    .mv-date-clear:hover{ color: #444; }
     .mv-field input:focus, .mv-field select:focus{
         border-color: #bdbdbd;
     }
@@ -122,6 +170,12 @@
         cursor: pointer;
         box-shadow: 0 10px 26px rgba(255,56,92,.18);
         transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    }
+    .mv-btn--primary:disabled{
+        opacity: .55;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
     }
     .mv-btn--primary:hover{
         transform: translateY(-1px);
@@ -182,6 +236,9 @@
         border-radius: 14px;
         background: #fff;
     }
+    .mv-apartments{
+        display: none;
+    }
     .mv-apartments__title{
         font-size: 13px;
         font-weight: 700;
@@ -213,6 +270,58 @@
         font-weight: 700;
         opacity: .8;
         pointer-events: none;
+    }
+    .mv-grid.mv-grouped{
+        display: block;
+        grid-template-columns: none;
+    }
+    .mv-group-header{
+        font-size: 14px;
+        font-weight: 700;
+        margin: 16px 2px 8px 2px;
+    }
+    .mv-dateField{
+        border: 1px solid #cfcfcf;
+        border-radius: 14px;
+        padding: 10px 12px;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        background: #fff;
+    }
+    .mv-dateField:hover{ background: #f7f7f7; }
+    .mv-dateField > div{
+        position: relative;
+        padding-left: 10px;
+    }
+    .mv-dateField > div:first-child{
+        padding-left: 0;
+    }
+    .mv-dateField > div:nth-child(2)::before{
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 4px;
+        bottom: 4px;
+        width: 1px;
+        background: #e4e4e4;
+    }
+    .mv-dateField__label{
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        opacity: .7;
+    }
+    .mv-dateField__value{
+        font-weight: 600;
+        font-size: 14px;
+        margin-top: 2px;
+    }
+    .mv-group-meta{
+        font-size: 12px;
+        opacity: .7;
+        margin: 8px 2px 10px 2px;
     }
     .mv-selected{
         outline: 2px solid #ff385c;
@@ -362,6 +471,86 @@
         border-radius: 18px;
         overflow:hidden;
     }
+    .mv-calendar{
+        position:fixed;
+        inset:0;
+        display:none;
+        z-index:10000;
+    }
+    .mv-calendar[aria-hidden="false"]{ display:block; }
+    .mv-calendar__backdrop{
+        position:absolute;
+        inset:0;
+        background: rgba(0,0,0,.55);
+    }
+    .mv-calendar__panel{
+        position:relative;
+        max-width: 760px;
+        margin: 10vh auto;
+        background:#fff;
+        border-radius: 16px;
+        padding: 14px;
+    }
+    .mv-calendar__header{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        font-weight:700;
+        margin-bottom: 8px;
+    }
+    .mv-calendar__close{
+        border: 1px solid #eee;
+        background: #fff;
+        border-radius: 10px;
+        padding: 6px 10px;
+        cursor:pointer;
+    }
+    .mv-calendar__months{
+        display:grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+    .mv-cal__month{
+        border: 1px solid #f0f0f0;
+        border-radius: 12px;
+        padding: 10px;
+    }
+    .mv-cal__title{
+        font-weight:700;
+        margin-bottom: 6px;
+    }
+    .mv-cal__weekdays,
+    .mv-cal__grid{
+        display:grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        font-size: 12px;
+        text-align:center;
+    }
+    .mv-cal__day{
+        border: 1px solid transparent;
+        background: #fff;
+        border-radius: 8px;
+        padding: 6px 0;
+        cursor: pointer;
+    }
+    .mv-cal__day.is-disabled{
+        opacity: .35;
+        cursor: not-allowed;
+    }
+    .mv-cal__day.is-start,
+    .mv-cal__day.is-end{
+        border-color: #ff385c;
+        background: #fff5f7;
+        font-weight:700;
+    }
+    .mv-cal__day.is-inrange{
+        background: #fff5f7;
+    }
+    @media(max-width: 760px){
+        .mv-calendar__months{ grid-template-columns: 1fr; }
+        .mv-calendar__panel{ margin: 6vh 12px; }
+    }
     .mv-modal__close{
         position:absolute;
         top: 10px;
@@ -411,6 +600,10 @@
         background:#fff;
     }
     .mv-actions{ display:grid; gap:10px; margin-top: 12px; }
+    .mv-modal__note{
+        font-size: 12px;
+        opacity: .7;
+    }
     .mv-link{
         display:inline-block;
         font-size: 13px;
@@ -473,8 +666,13 @@
     const $modalContent = $("mvModalContent");
     const $apartmentsStatus = $("mvApartmentsStatus");
     const $apartmentsList = $("mvApartmentsList");
+    const $datesBtn = $("mvDatesBtn");
+    const $calendarModal = $("mvCalendarModal");
+    const $calendarMonths = $("mvCalendarMonths");
+    const $calendarClose = $("mvCalendarClose");
     const $availabilityStatus = $("availabilityStatus");
     const $availabilityPrice = $("availabilityPrice");
+    const $datesClear = $("mvDatesClear");
     let savedFilterActive = false;
     let currentList = PROPERTIES;
     let selectedPropertyId = "";
@@ -558,47 +756,15 @@
                 $apartmentsStatus.textContent = "No apartments returned.";
                 return;
             }
-            const availabilityById = window.mvAvailabilityById || {};
             const parentCandidates = apartments.filter((apartment) =>
                 apartments.some((other) => other !== apartment && other?.name?.startsWith(`${apartment.name} `))
             );
-            const parentNames = new Set(parentCandidates.map((apartment) => apartment.name));
-            const groups = new Map();
-
-            apartments.forEach((apartment) => {
-                const name = apartment?.name || "";
-                if (parentNames.has(name)) return;
-                const parentMatch = parentCandidates.find((candidate) => name.startsWith(`${candidate.name} `));
-                const parentName = parentMatch ? parentMatch.name : "Other";
-                if (!groups.has(parentName)) groups.set(parentName, []);
-                const availability = availabilityById[getApartmentId(apartment)];
-                if (availability?.available === false) return;
-                groups.get(parentName).push(apartment);
-            });
-
-            const orderedParents = [...new Set(parentCandidates.map((apartment) => apartment.name))]
-                .sort((a, b) => a.localeCompare(b));
-            const otherChildren = groups.get("Other") || [];
-
-            const propertyCount = orderedParents.filter((name) => (groups.get(name) || []).length).length;
-            const unitCount = [...groups.values()].reduce((sum, children) => sum + children.length, 0);
-            $apartmentsStatus.textContent = `${propertyCount} properties • ${unitCount} units`;
-
-            $apartmentsList.innerHTML = orderedParents.map((parentName) => {
-                const children = groups.get(parentName) || [];
-                if (!children.length) return "";
-                const header = `<li class="mv-apartments__group">${parentName}</li>`;
-                const childItems = children.map((apartment) => {
-                    const id = getApartmentId(apartment);
-                    const name = apartment.name || `Apartment ${id}`;
-                    return `<li data-apartment-id="${id}">${name}</li>`;
-                }).join("");
-                return `${header}${childItems}`;
-            }).join("") + (otherChildren.length ? `<li class="mv-apartments__group">Other</li>${otherChildren.map((apartment) => {
-                const id = getApartmentId(apartment);
-                const name = apartment.name || `Apartment ${id}`;
-                return `<li data-apartment-id="${id}">${name}</li>`;
-            }).join("")}` : "");
+            window.mvParentCandidates = parentCandidates.map((apartment) => apartment.name);
+            $apartmentsStatus.textContent = "";
+            $apartmentsList.innerHTML = "";
+            // Default to showing all listings on initial load (no user action required).
+            renderWithFilters();
+            updateSavedCount(false);
         } catch (err) {
             $apartmentsStatus.textContent = "Unable to load apartments right now.";
             console.error("Failed to load Smoobu apartments:", err);
@@ -639,6 +805,165 @@
         }
     }
 
+    // UI calendar modal; writes to existing date inputs; core logic untouched.
+    const $checkinInput = $("mvCheckin");
+    const $checkoutInput = $("mvCheckout");
+    let calendarStart = null;
+    let calendarEnd = null;
+
+    const parseISODate = (value) => {
+        if (!value) return null;
+        const [y, m, d] = value.split("-").map(Number);
+        if (!y || !m || !d) return null;
+        return new Date(y, m - 1, d);
+    };
+    const toISODate = (date) => {
+        if (!date) return "";
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+    };
+    const formatDisplayDate = (date) => new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric"
+    }).format(date);
+    const updateDatesDisplay = () => {
+        const inVal = $checkinInput.value;
+        const outVal = $checkoutInput.value;
+        if (inVal && outVal) {
+            const inDate = parseISODate(inVal);
+            const outDate = parseISODate(outVal);
+            if (inDate && outDate) {
+                $datesBtn.textContent = `${formatDisplayDate(inDate)} - ${formatDisplayDate(outDate)}`;
+                $datesClear.style.display = "block";
+                return;
+            }
+        }
+        $datesBtn.textContent = "Add dates";
+        $datesClear.style.display = "none";
+    };
+    const updateSearchBtnState = () => {
+        const hasDates = Boolean($checkinInput.value && $checkoutInput.value);
+        $searchBtn.disabled = !hasDates;
+    };
+    const updateModalIfOpen = () => {
+        if ($modal.getAttribute("aria-hidden") === "false") {
+            renderModalBookingWidget();
+        }
+    };
+    const clearDatesAndRefresh = () => {
+        setInputValue($checkinInput, "");
+        setInputValue($checkoutInput, "");
+        window.mvAvailabilityById = {};
+        $availabilityStatus.textContent = "";
+        $availabilityPrice.textContent = "";
+        updateDatesDisplay();
+        updateSearchBtnState();
+        renderWithFilters();
+        updateSavedCount(false);
+        updateModalIfOpen();
+    };
+    const setInputValue = (input, value) => {
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const renderCalendar = () => {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        $calendarMonths.innerHTML = "";
+        const base = new Date();
+        base.setDate(1);
+
+        for (let offset = 0; offset < 2; offset += 1) {
+            const monthDate = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+            const monthTitle = monthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+            const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
+            const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+
+            const monthEl = document.createElement("div");
+            monthEl.className = "mv-cal__month";
+            monthEl.innerHTML = `
+                <div class="mv-cal__title">${monthTitle}</div>
+                <div class="mv-cal__weekdays">
+                    <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+                </div>
+                <div class="mv-cal__grid"></div>
+            `;
+            const grid = monthEl.querySelector(".mv-cal__grid");
+            for (let i = 0; i < firstDay; i += 1) {
+                grid.appendChild(document.createElement("div"));
+            }
+            for (let day = 1; day <= daysInMonth; day += 1) {
+                const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+                const isDisabled = date < today;
+                const isStart = calendarStart && toISODate(date) === toISODate(calendarStart);
+                const isEnd = calendarEnd && toISODate(date) === toISODate(calendarEnd);
+                const inRange = calendarStart && calendarEnd && date > calendarStart && date < calendarEnd;
+
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "mv-cal__day";
+                btn.textContent = String(day);
+                btn.dataset.date = toISODate(date);
+                if (isDisabled) btn.classList.add("is-disabled");
+                if (isStart) btn.classList.add("is-start");
+                if (isEnd) btn.classList.add("is-end");
+                if (inRange) btn.classList.add("is-inrange");
+                grid.appendChild(btn);
+            }
+            $calendarMonths.appendChild(monthEl);
+        }
+    };
+    const openCalendar = () => {
+        calendarStart = parseISODate($checkinInput.value);
+        calendarEnd = parseISODate($checkoutInput.value);
+        renderCalendar();
+        $calendarModal.setAttribute("aria-hidden", "false");
+    };
+    const closeCalendar = () => {
+        $calendarModal.setAttribute("aria-hidden", "true");
+    };
+
+    $datesBtn.addEventListener("click", openCalendar);
+    $datesClear.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        clearDatesAndRefresh();
+    });
+    $calendarClose.addEventListener("click", closeCalendar);
+    $calendarModal.addEventListener("click", (event) => {
+        if (event.target.dataset.calClose) closeCalendar();
+    });
+    $calendarMonths.addEventListener("click", (event) => {
+        const dayBtn = event.target.closest(".mv-cal__day");
+        if (!dayBtn || dayBtn.classList.contains("is-disabled")) return;
+        const picked = parseISODate(dayBtn.dataset.date);
+        if (!calendarStart || (calendarStart && calendarEnd)) {
+            calendarStart = picked;
+            calendarEnd = null;
+            renderCalendar();
+            return;
+        }
+        if (picked < calendarStart) {
+            calendarStart = picked;
+            calendarEnd = null;
+            renderCalendar();
+            return;
+        }
+        calendarEnd = picked;
+        setInputValue($checkinInput, toISODate(calendarStart));
+        setInputValue($checkoutInput, toISODate(calendarEnd));
+        updateDatesDisplay();
+        updateSearchBtnState();
+        updateModalIfOpen();
+        closeCalendar();
+    });
+    document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeCalendar();
+    });
+
     function ensureSelectedPropertyId(list) {
         if (!list.length) {
             selectedPropertyId = "";
@@ -652,8 +977,32 @@
 
     function renderCards(list) {
         ensureSelectedPropertyId(list);
+        const availabilityById = window.mvAvailabilityById || {};
         const favs = getFavs();
-        $results.innerHTML = list.map(p => `
+        const parentCandidates = (window.mvParentCandidates || []).filter(Boolean);
+        const names = list.map((item) => item.name || "").filter(Boolean);
+        const derivedParents = parentCandidates.length
+            ? parentCandidates
+            : names.filter((name) => names.some((other) => other !== name && other.startsWith(`${name} `)));
+        const parentSet = new Set(derivedParents);
+        // Removed debug summary + replaced fallback group with parent property headers.
+        const desiredParentOrder = ["Casa Victoria", "Vista Victoria"];
+        const sortedParents = desiredParentOrder.filter((name) => derivedParents.includes(name));
+        const groups = new Map();
+
+        list.forEach((item) => {
+            const name = item.name || "";
+            if (parentSet.has(name)) return;
+            const availability = availabilityById[String(item.id)];
+            if (availability?.available === false) return;
+            const matches = sortedParents.filter((parentName) => name.startsWith(`${parentName} `));
+            if (!matches.length) return;
+            const parentName = matches.sort((a, b) => b.length - a.length)[0];
+            if (!groups.has(parentName)) groups.set(parentName, []);
+            groups.get(parentName).push(item);
+        });
+
+        const cardMarkup = (p) => `
             <div class="mv-card" data-id="${p.id}" data-property-id="${getPropertyId(p)}" data-apartment-id="${p.id}">
                 <div class="mv-heart${favs.has(getPropertyId(p)) ? " is-saved" : ""}" data-heart="1" data-id="${p.id}" data-property-id="${getPropertyId(p)}" data-on="${favs.has(getPropertyId(p)) ? 1 : 0}">
                     ${favs.has(getPropertyId(p)) ? "♥" : "♡"}
@@ -669,7 +1018,21 @@
                     <div class="mv-card__tag">${p.tagline || ""}</div>
                 </div>
             </div>
-        `).join("");
+        `;
+
+        $results.classList.add("mv-grouped");
+        $results.innerHTML = `
+            ${sortedParents.map((parentName) => {
+                const children = (groups.get(parentName) || []).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+                if (!children.length) return "";
+                return `
+                    <h3 class="group-header">${parentName}</h3>
+                    <div class="mv-grid mv-group-grid">
+                        ${children.map(cardMarkup).join("")}
+                    </div>
+                `;
+            }).join("")}
+        `;
     }
 
     function updateSavedCount(isActive = false) {
@@ -684,7 +1047,7 @@
             renderCards(currentList);
             const count = currentList.length;
             $msg.textContent = count
-                ? `${count} option${count===1?"":"s"} shown.`
+                ? ""
                 : "No properties available for these dates.";
             return;
         }
@@ -694,7 +1057,7 @@
         renderCards(saved);
         const count = saved.length;
         $msg.textContent = count
-            ? `${count} saved propert${count===1?"y":"ies"} shown.`
+            ? ""
             : "No saved properties yet";
     }
 
@@ -724,9 +1087,10 @@
                     </div>
 
                     <div class="mv-actions">
+                        <div id="mvModalBooking"></div>
                         <button id="mvReserveBtn" class="mv-btn mv-btn--primary" type="button">Check availability</button>
-                        <small>No payment required</small>
-                        <button class="mv-btn mv-btn--ghost" data-close="1" type="button">Done</button>
+                        <div id="mvModalChargeNote" class="mv-modal__note"></div>
+                        <!-- Removed redundant Done button — modal closes via X or Reserve only. -->
                     </div>
 
                     <a class="mv-link" href="${p.url}" target="_blank" rel="noopener">Open full property page →</a>
@@ -741,10 +1105,59 @@
         });
 
         $modal.setAttribute("aria-hidden", "false");
+        renderModalBookingWidget();
     }
 
     function closeModal() {
         $modal.setAttribute("aria-hidden", "true");
+    }
+
+    // Modal dates are now a clickable field (Airbnb-style) that opens the existing calendar.
+    function renderModalBookingWidget() {
+        if ($modal.getAttribute("aria-hidden") !== "false") return;
+        const container = $("mvModalBooking");
+        if (!container) return;
+        const checkIn = $checkinInput.value;
+        const checkOut = $checkoutInput.value;
+        const hasDates = Boolean(checkIn && checkOut);
+        const inDate = parseISODate(checkIn);
+        const outDate = parseISODate(checkOut);
+        const checkInLabel = hasDates && inDate ? formatDisplayDate(inDate) : "Add dates";
+        const checkOutLabel = hasDates && outDate ? formatDisplayDate(outDate) : "Add dates";
+
+        container.innerHTML = `
+            <div id="mvModalDatesField" class="mv-dateField" role="button" tabindex="0" aria-label="Change dates">
+                <div>
+                    <div class="mv-dateField__label">Check-in</div>
+                    <div class="mv-dateField__value">${checkInLabel}</div>
+                </div>
+                <div>
+                    <div class="mv-dateField__label">Checkout</div>
+                    <div class="mv-dateField__value">${checkOutLabel}</div>
+                </div>
+            </div>
+        `;
+
+        const cta = $("mvReserveBtn");
+        if (cta) cta.textContent = hasDates ? "Reserve" : "Check availability";
+
+        const note = $("mvModalChargeNote");
+        if (note) note.textContent = hasDates ? "You won’t be charged yet" : "";
+
+        const datesField = $("mvModalDatesField");
+        if (datesField) {
+            datesField.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openCalendar();
+            });
+            datesField.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openCalendar();
+                }
+            });
+        }
     }
 
     async function checkAvailability() {
@@ -794,7 +1207,8 @@
             }
 
             if (price != null && price !== "") {
-                $availabilityPrice.textContent = `Nightly price: ${price}`;
+                // UI currency label only; pricing math unchanged.
+                $availabilityPrice.textContent = `Nightly price: $${price} USD`;
             }
         } catch (err) {
             $availabilityStatus.textContent = "Unable to check availability right now.";
@@ -855,7 +1269,7 @@
                     const subtitle = card.querySelector(".mv-card__meta span:last-child");
                     if (subtitle) {
                         const priceText = nightlyPrice != null && nightlyPrice !== "" ? nightlyPrice : "—";
-                        subtitle.textContent = `Nightly price: ${priceText}`;
+                        subtitle.textContent = `Nightly price: $${priceText} USD`;
                     }
                     const listItem = $apartmentsList.querySelector(`[data-apartment-id="${apartmentId}"]`);
                     if (listItem) listItem.style.display = "";
@@ -897,6 +1311,27 @@
             header.style.display = hasVisible ? "" : "none";
         });
 
+        // UI summary uses min nightlyPrice from current rendered available units; pricing logic unchanged.
+        const availableCards = cards.filter((card) => card.style.display !== "none");
+        if (!availableCards.length) {
+            $availabilityStatus.textContent = "No availability for these dates";
+            $availabilityPrice.textContent = "";
+        } else {
+            const prices = availableCards
+                .map((card) => availabilityById[card.dataset.apartmentId]?.nightlyPrice)
+                .map((value) => Number(value))
+                .filter((value) => Number.isFinite(value));
+            if (!prices.length) {
+                $availabilityStatus.textContent = "Available · Select dates to see price";
+                $availabilityPrice.textContent = "";
+            } else {
+                const minPrice = Math.min(...prices);
+                const priceLabel = Number.isInteger(minPrice) ? String(minPrice) : minPrice.toFixed(2);
+                $availabilityStatus.textContent = `Available · Nightly price from $${priceLabel} USD`;
+                $availabilityPrice.textContent = "";
+            }
+        }
+
         $searchBtn.disabled = false;
         $searchBtn.textContent = originalLabel;
     });
@@ -914,6 +1349,12 @@
     $("mvCheckin").addEventListener("change", () => { ensureCheckoutAfterCheckin(); runSearch(); });
     $("mvCheckout").addEventListener("change", runSearch);
     $("mvGuests").addEventListener("change", runSearch);
+    $("mvCheckin").addEventListener("input", updateSearchBtnState);
+    $("mvCheckout").addEventListener("input", updateSearchBtnState);
+    $("mvCheckin").addEventListener("change", updateModalIfOpen);
+    $("mvCheckout").addEventListener("change", updateModalIfOpen);
+    $("mvCheckin").addEventListener("input", updateModalIfOpen);
+    $("mvCheckout").addEventListener("input", updateModalIfOpen);
 
     $results.addEventListener("click", (e) => {
         const innerAction = e.target.closest("button, a");
