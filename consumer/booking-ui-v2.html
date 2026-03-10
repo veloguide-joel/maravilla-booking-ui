@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>maraVilla Booking UI v2</title>
+  <style>
+      .booking-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0,0,0,0.45);
+        z-index: 1000;
+        padding: 40px 20px;
+        overflow-y: auto;
+      }
+      .booking-modal.active {
+        display: flex;
+      }
+      .booking-modal__dialog {
+        width: min(960px, 94vw);
+        max-height: 82vh;
+        background: #fff;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 30px 80px rgba(0,0,0,.25);
+        display: flex;
+        align-items: stretch;
+      }
+      .booking-modal__media {
+        flex: 0 0 58%;
+        min-width: 0;
+        background: #f3f3f3;
+      }
+      .booking-modal__media img,
+      .booking-modal__img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .booking-modal__content {
+        flex: 1 1 42%;
+        min-width: 320px;
+        padding: 20px 18px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .booking-modal__content h2 {
+        margin: 0 0 6px;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+      .booking-modal__meta {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: #555;
+      }
+    /* Airbnb-inspired UI Shell */
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: #fafafa;
+      margin: 0;
+      padding: 0;
+    }
+    .mv-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 12px 40px;
+    }
+    .mv-search-bar {
+      display: flex;
+      gap: 12px;
+      background: #fff;
+      border-radius: 32px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+      padding: 18px 24px;
+      margin-bottom: 32px;
+      align-items: center;
+    }
+    .mv-search-bar input, .mv-search-bar select {
+      border: none;
+      background: #f7f7f7;
+      border-radius: 18px;
+      padding: 10px 14px;
+      font-size: 15px;
+      outline: none;
+      flex: 1;
+    }
+    .mv-search-bar button {
+      background: #ff385c;
+      color: #fff;
+      border: none;
+      border-radius: 18px;
+      padding: 10px 18px;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(255,56,92,0.13);
+      transition: background .18s;
+    }
+    .mv-search-bar button:hover {
+      background: #e11d48;
+    }
+    .mv-section {
+      margin-bottom: 48px;
+    }
+    .mv-section-title {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 18px;
+          /* Modal visibility and overlay */
+          .booking-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+          }
+          .booking-modal.active {
+            display: flex;
+          }
+      color: #222;
+      letter-spacing: .01em;
+    }
+    .mv-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 320px));
+      gap: 28px;
+      justify-content: start;
+    }
+    .mv-card {
+      display: flex;
+      flex-direction: column;
+      border-radius: 24px;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid rgba(0,0,0,.08);
+      box-shadow: 0 2px 10px rgba(0,0,0,.04);
+      height: 100%;
+      position: relative;
+      transition: box-shadow .18s, transform .18s;
+      cursor: pointer;
+    }
+    .mv-card:hover {
+      box-shadow: 0 8px 32px rgba(0,0,0,0.14);
+      transform: translateY(-2px) scale(1.01);
+    }
+    .mv-card__img-wrapper {
+      position: relative;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      background: #f3f3f3;
+    }
+    .mv-card__img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .mv-heart {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: rgba(255,255,255,0.96);
+      border: none;
+      border-radius: 50%;
+      width: 38px;
+      height: 38px;
+      font-size: 18px;
+      color: #ff385c;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+      cursor: pointer;
+      z-index: 2;
+      transition: background .18s;
+    }
+    .mv-heart.is-saved {
+      color: #d90429;
+      background: #ffe3e8;
+    }
+    .mv-card__body {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 14px 16px 18px 16px;
+      flex: 1;
+    }
+    .mv-card__title {
+      font-size: 16px;
+      line-height: 1.25;
+      font-weight: 700;
+      color: #111;
+      margin: 0;
+    }
+    .mv-card__meta {
+      font-size: 13px;
+      line-height: 1.45;
+      color: rgba(0,0,0,.68);
+    }
+    .mv-card__meta span {
+      display: block;
+    }
+    .mv-card__price {
+      margin-top: auto;
+      font-size: 14px;
+      font-weight: 600;
+      color: #111;
+    }
+    @media (max-width: 700px) {
+      .mv-section-title {
+        font-size: 18px;
+        margin-bottom: 12px;
+      }
+      .mv-card-grid {
+        gap: 16px;
+      }
+      .mv-card__body {
+        padding: 10px 8px 12px 8px;
+      }
+    }
+    @media (max-width: 480px) {
+      .mv-container {
+        padding: 8px 2px 24px;
+      }
+      .mv-search-bar {
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 8px;
+      }
+      .mv-section-title {
+        font-size: 15px;
+      }
+      .mv-card__body {
+        padding: 8px 4px 8px 4px;
+      }
+    }
+    .listing-card { cursor: pointer; }
+    .booking-modal__form {
+      display: grid;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .booking-modal__form label {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .booking-modal__form input,
+    .booking-modal__form select {
+      width: 100%;
+      height: 44px;
+      border: 1px solid #d8d8d8;
+      border-radius: 10px;
+      padding: 0 12px;
+      font-size: 14px;
+      background: #fff;
+      color: #111;
+      box-sizing: border-box;
+      outline: none;
+    }
+    .booking-modal__form input:focus,
+    .booking-modal__form select:focus {
+      border-color: #111;
+    }
+    .booking-modal__form button,
+    .booking-modal__cta {
+      height: 46px;
+      border: 0;
+      border-radius: 999px;
+      background: #ff385c;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 0 18px;
+      cursor: pointer;
+    }
+    .booking-modal__link {
+      font-size: 14px;
+      color: #6b4eff;
+      text-decoration: underline;
+  </style>
+</head>
+<body>
+  <div class="mv-container">
+    <div class="mv-search-bar">
+      <input type="text" placeholder="Where to?" style="flex:2;">
+      <input type="date" placeholder="Check-in">
+      <input type="date" placeholder="Check-out">
+      <select>
+        <option>Guests</option>
+        <option>1</option>
+        <option>2</option>
+        <option>3</option>
+        <option>4</option>
+        <option>5</option>
+        <option>6</option>
+        <option>7</option>
+        <option>8</option>
+      </select>
+      <button>Search</button>
+    </div>
+    <div class="mv-section">
+      <div class="mv-section-title">Casa Victoria</div>
+      <div class="mv-card-grid">
+        <!-- Mock cards for Casa Victoria -->
+      </div>
+    </div>
+    <div class="mv-section">
+      <div class="mv-section-title">Vista Victoria</div>
+      <div class="mv-card-grid">
+        <!-- Mock cards for Vista Victoria -->
+      </div>
+    </div>
+  </div>
+  <div class="booking-modal">
+    <div class="booking-modal__backdrop"></div>
+    <div class="booking-modal__dialog">
+      <button class="booking-modal__close" aria-label="Close">×</button>
+      <div class="booking-modal__media">
+        <img class="booking-modal__img" src="" alt="Property image" />
+      </div>
+      <div class="booking-modal__content">
+        <h2 class="booking-modal__title"></h2>
+        <p class="booking-modal__meta"></p>
+        <form class="booking-modal__form" autocomplete="off">
+          <div class="booking-modal__row">
+            <label>Check-in</label>
+            <input type="date" name="checkin" required />
+          </div>
+          <div class="booking-modal__row">
+            <label>Check-out</label>
+            <input type="date" name="checkout" required />
+          </div>
+          <div class="booking-modal__row">
+            <label>Guests</label>
+            <select name="guests">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+            </select>
+          </div>
+          <button type="submit" class="booking-modal__cta">Check availability</button>
+        </form>
+        <a class="booking-modal__link" href="#" target="_blank" rel="noopener">Open full property page</a>
+      </div>
+    </div>
+  </div>
+  <script>
+    const API_BASE = "https://maravilla-smoobu-proxy.vercel.app";
+    const PROPERTIES = [
+      {
+        id: 3155581,
+        name: "Casa Victoria — Villa A",
+        sleeps: 6,
+        tagline: "2BR • 2 Bath • 1.5 blocks to the beach",
+        img: "https://images.squarespace-cdn.com/content/v1/56c4c3281bbee0fde9e882cf/1726259424715-7Q01O05WF5VTOAGY4PFX/Casa%2BVictoria%2B-%2BApartment%2BD%2B008.jpg",
+        url: "https://www.maravillanayarit.com/patio-villa-a",
+        baseNightly: 220
+      },
+      {
+        id: 3155591,
+        name: "Casa Victoria — Villa C",
+        sleeps: 6,
+        tagline: "2BR • 2 Bath • Private balcony",
+        img: "https://images.squarespace-cdn.com/content/v1/56c4c3281bbee0fde9e882cf/1639429044647-Q73Y374R2VURECZ1SGM9/PDP03935.jpg",
+        url: "https://www.maravillanayarit.com/unit-c-upper",
+        baseNightly: 180
+      },
+      {
+        id: 3155586,
+        name: "Casa Victoria — Villa D",
+        sleeps: 6,
+        tagline: "2BR • 2 Bath • Upper unit",
+        img: "https://images.squarespace-cdn.com/content/v1/56c4c3281bbee0fde9e882cf/1639429152074-QH8ZZ2TNPNALMPDN3W8A/PDP03786.jpg",
+        url: "https://www.maravillanayarit.com/unit-d-upper",
+        baseNightly: 320
+      },
+      {
+        id: 3155576,
+        name: "Vista Victoria — Town House #1",
+        sleeps: 8,
+        tagline: "Townhome • Great for families",
+        img: "https://images.squarespace-cdn.com/content/v1/56c4c3281bbee0fde9e882cf/1618930764543-DE7D7M9F3PWYIDWR51PK/DSC08761sm.jpg",
+        url: "https://www.maravillanayarit.com/vista-victoria-town-house-1",
+        baseNightly: 210
+      }
+    ];
+
+    function groupUnitsByParent(units) {
+      const groups = {
+        "Casa Victoria": [],
+        "Vista Victoria": []
+      };
+      units.forEach(unit => {
+        if (unit.name.startsWith("Casa Victoria")) {
+          groups["Casa Victoria"].push(unit);
+        } else if (unit.name.startsWith("Vista Victoria")) {
+          groups["Vista Victoria"].push(unit);
+        }
+      });
+      return groups;
+    }
+
+    function formatPrice(unit, checkIn, checkOut) {
+      // If no dates, show base nightly price
+      if (!checkIn || !checkOut) {
+        return `From $${unit.baseNightly || unit.nightlyPrice || '—'} / night`;
+      }
+      // If dates and total pricing available
+      if (unit.totalPrice && unit.nights) {
+        return `$${unit.totalPrice} total · ${unit.nights} nights`;
+      }
+      // Fallback
+      if (unit.nightlyPrice) {
+        return `From $${unit.nightlyPrice} / night`;
+      }
+      return 'Select dates to see price & availability';
+    }
+
+    async function fetchAvailability(units, checkIn, checkOut, guests) {
+      const results = [];
+      let nights = 0;
+      if (checkIn && checkOut) {
+        const inDate = new Date(checkIn);
+        const outDate = new Date(checkOut);
+        nights = Math.max(1, Math.round((outDate - inDate) / (1000 * 60 * 60 * 24)));
+      }
+      for (const unit of units) {
+        const params = new URLSearchParams({
+          apartmentId: String(unit.id),
+          checkIn,
+          checkOut,
+          guests: String(guests)
+        });
+        try {
+          const resp = await fetch(`${API_BASE}/api/smoobu/availability?${params.toString()}`);
+          if (!resp.ok) throw new Error("Availability error");
+          const data = await resp.json();
+          const available = data?.available ?? data?.isAvailable ?? data?.availability?.available;
+          const nightlyPrice = data?.nightlyPrice ?? data?.price ?? data?.availability?.price;
+          const totalPrice = data?.totalPrice ?? data?.availability?.totalPrice ?? (nightlyPrice && nights ? nightlyPrice * nights : null);
+          results.push({
+            ...unit,
+            available,
+            nightlyPrice,
+            totalPrice,
+            nights
+          });
+        } catch {
+          results.push({ ...unit, available: false, nightlyPrice: null, totalPrice: null, nights });
+        }
+      }
+      return results;
+    }
+
+    function renderCards(section, units, checkIn, checkOut) {
+      const grid = section.querySelector('.mv-card-grid');
+      grid.innerHTML = units.map(unit => `
+        <div class="airbnb-card listing-card"
+          data-unit-id="${unit.id}"
+          data-title="${unit.name.replace(/^.*?—\s*/, '')}"
+          data-image="${unit.img}"
+          data-meta="${unit.tagline} · Sleeps ${unit.sleeps}"
+          style="${unit.available === false ? 'display:none;' : ''}">
+          <div class="mv-card__img-wrapper">
+            <img class="mv-card__img" src="${unit.img}" alt="${unit.name}" loading="eager">
+            <button class="mv-heart" aria-label="Save">♡</button>
+          </div>
+          <div class="mv-card__body">
+            <div class="mv-card__title">${unit.name.replace(/^.*?—\s*/, '')}</div>
+            <div class="mv-card__meta">
+              <span>Sleeps ${unit.sleeps}</span>
+              <span>${unit.tagline}</span>
+            </div>
+            <div class="mv-card__price">${formatPrice(unit, checkIn, checkOut)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function runSearch() {
+      const checkIn = document.querySelector('.mv-search-bar input[type="date"]:nth-child(2)').value;
+      const checkOut = document.querySelector('.mv-search-bar input[type="date"]:nth-child(3)').value;
+      const guests = document.querySelector('.mv-search-bar select').value || 1;
+      const grouped = groupUnitsByParent(PROPERTIES);
+      for (const section of document.querySelectorAll('.mv-section')) {
+        const title = section.querySelector('.mv-section-title').textContent;
+        const units = grouped[title] || [];
+        const availableUnits = await fetchAvailability(units, checkIn, checkOut, guests);
+        renderCards(section, availableUnits, checkIn, checkOut);
+      }
+    }
+
+    document.querySelector('.mv-search-bar button').addEventListener('click', runSearch);
+
+    // Initial render (no availability)
+    const grouped = groupUnitsByParent(PROPERTIES);
+    document.querySelectorAll('.mv-section').forEach(section => {
+      const title = section.querySelector('.mv-section-title').textContent;
+      renderCards(section, grouped[title] || [], null, null);
+    });
+
+    // BOOKING MODAL START
+    const modal = document.querySelector('.booking-modal');
+    const modalBackdrop = modal.querySelector('.booking-modal__backdrop');
+    const modalClose = modal.querySelector('.booking-modal__close');
+    const modalImg = modal.querySelector('.booking-modal__img');
+    const modalTitle = modal.querySelector('.booking-modal__title');
+    const modalMeta = modal.querySelector('.booking-modal__meta');
+    const modalForm = modal.querySelector('.booking-modal__form');
+    const modalLink = modal.querySelector('.booking-modal__link');
+    let modalProperty = null;
+
+    function openModal(property) {
+      modalProperty = property;
+      modalImg.src = property.img;
+      modalImg.alt = property.name;
+      modalTitle.textContent = property.name.replace(/^.*?—\s*/, '');
+      modalMeta.textContent = `${property.tagline} · Sleeps ${property.sleeps}`;
+      modalLink.href = property.url;
+      modalLink.textContent = 'Open full property page';
+      modal.hidden = false;
+    }
+    function closeModal() {
+      modal.classList.remove("active");
+      modalProperty = null;
+      modalForm.reset();
+    }
+    modalClose.addEventListener('click', closeModal);
+    modalBackdrop.addEventListener('click', closeModal);
+    document.addEventListener('keydown', (e) => {
+      if (!modal.hidden && (e.key === 'Escape' || e.key === 'Esc')) closeModal();
+    });
+    // MODAL CLICK FIX START
+    function openBookingModal(data) {
+      console.log("OPEN FN RUN — VERSION B", data);
+      const modal = document.querySelector('.booking-modal');
+      modal.querySelector('.booking-modal__img').src = data.image;
+      modal.querySelector('.booking-modal__img').alt = data.title;
+      modal.querySelector('.booking-modal__title').textContent = data.title;
+      modal.querySelector('.booking-modal__meta').textContent = data.meta;
+      modal.classList.add("active");
+      // TEMPORARY: Force modal visible with inline styles
+      modal.style.display = "flex";
+      modal.style.position = "fixed";
+      modal.style.inset = "0";
+      modal.style.zIndex = "9999";
+      modal.style.background = "rgba(0,0,0,0.45)";
+      modal.style.alignItems = "center";
+      modal.style.justifyContent = "center";
+    }
+    document.addEventListener("click", (event) => {
+      const modalClose = event.target.closest(".booking-modal__close");
+      if (modalClose) {
+        const modal = document.querySelector(".booking-modal");
+        if (modal) {
+          modal.removeAttribute("style");
+          modal.classList.remove("active");
+        }
+        return;
+      }
+      // ...existing code...
+    });
+    // MODAL CLICK FIX END
+    // Update card markup in renderCards
+    function renderCards(section, units, checkIn, checkOut) {
+      const grid = section.querySelector('.mv-card-grid');
+      grid.innerHTML = units.map(unit => `
+        <div class="airbnb-card listing-card"
+          data-unit-id="${unit.id}"
+          data-title="${unit.name.replace(/^.*?—\s*/, '')}"
+          data-image="${unit.img}"
+          data-meta="${unit.tagline} · Sleeps ${unit.sleeps}"
+          style="${unit.available === false ? 'display:none;' : ''}">
+          <div class="mv-card__img-wrapper">
+            <img class="mv-card__img" src="${unit.img}" alt="${unit.name}" loading="eager">
+            <button class="mv-heart" aria-label="Save">♡</button>
+          </div>
+          <div class="mv-card__body">
+            <div class="mv-card__title">${unit.name.replace(/^.*?—\s*/, '')}</div>
+            <div class="mv-card__meta">
+              <span>Sleeps ${unit.sleeps}</span>
+              <span>${unit.tagline}</span>
+            </div>
+            <div class="mv-card__price">${formatPrice(unit, checkIn, checkOut)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Robust event delegation for modal opening
+    // Only triggers modal for card clicks, not heart button
+    // MODAL CLICK FIX END
+      /* MODAL INIT ORDER FIX START */
+      console.log("REGISTERING DOC CLICK");
+      document.addEventListener("click", (event) => {
+        console.log("DOC CLICK", event.target);
+        const favoriteButton = event.target.closest("button.mv-heart, .favorite-btn, .card-favorite, .heart-btn");
+        console.log("FAVORITE MATCH", favoriteButton);
+        if (favoriteButton) return;
+
+        const card = event.target.closest(".airbnb-card.listing-card");
+        console.log("CARD MATCH", card);
+        if (!card) return;
+
+        console.log("OPEN MODAL CALL");
+        openBookingModal({
+          title: card.dataset.title || "",
+          image: card.dataset.image || "",
+          meta: card.dataset.meta || "",
+          unitId: card.dataset.unitId || ""
+        });
+      });
+      /* MODAL INIT ORDER FIX END */
+    // BOOKING MODAL END
+  </script>
+</body>
+</html>
