@@ -1062,6 +1062,25 @@
     }
 
     function openModal(p) {
+                // Shared modal-only validation helper
+                function validateModalDates() {
+                    const checkinInput = $("mvCheckin");
+                    const checkoutInput = $("mvCheckout");
+                    clearBlockedMessage();
+                    if (!checkinInput || !checkoutInput) return;
+                    if (checkinInput.value && isDateBlocked(checkinInput.value)) {
+                        checkinInput.value = '';
+                        showBlockedMessage('Selected check-in date is unavailable.');
+                    }
+                    if (checkoutInput.value && isDateBlocked(checkoutInput.value)) {
+                        checkoutInput.value = '';
+                        showBlockedMessage('Selected check-out date is unavailable.');
+                    }
+                    if (checkinInput.value && checkoutInput.value && isRangeBlocked(checkinInput.value, checkoutInput.value)) {
+                        checkoutInput.value = '';
+                        showBlockedMessage('Selected date range overlaps an unavailable booking.');
+                    }
+                }
         const checkin = $("mvCheckin").value;
         const checkout = $("mvCheckout").value;
         const guests = $("mvGuests").value;
@@ -1105,6 +1124,113 @@
         });
 
         $modal.setAttribute("aria-hidden", "false");
+
+        // Modal-only unavailable-date protection
+        let modalBlockedRanges = [];
+        let modalBlockedMessage = null;
+        // Fetch reservations for selected apartment
+        const apartmentId = window.mvSelectedApartmentId;
+        if (apartmentId) {
+            fetch(`/api/smoobu/reservations?apartmentId=${encodeURIComponent(apartmentId)}`)
+                .then(resp => resp.json())
+                .then(data => {
+                    // TODO: If response shape unclear, verify exact field names
+                    // Example expected: data.reservations (array of { arrival, departure })
+                    if (Array.isArray(data.reservations)) {
+                        modalBlockedRanges = data.reservations.map(r => ({
+                            from: r.arrival || r.from,
+                            to: r.departure || r.to
+                        }));
+                    } else {
+                        modalBlockedRanges = [];
+                    }
+                    // Immediate validation for pre-populated dates
+                    validateModalDates();
+                })
+                .catch(() => { modalBlockedRanges = []; });
+        }
+
+        // Helper: check if date falls in blocked range
+        function isDateBlocked(dateStr) {
+            const date = new Date(dateStr);
+            return modalBlockedRanges.some(r => {
+                const from = new Date(r.from);
+                const to = new Date(r.to);
+                return date >= from && date <= to;
+            });
+        }
+
+        // Helper: check if range overlaps blocked
+        function isRangeBlocked(startStr, endStr) {
+            const start = new Date(startStr);
+            const end = new Date(endStr);
+            return modalBlockedRanges.some(r => {
+                const from = new Date(r.from);
+                const to = new Date(r.to);
+                return (start <= to && end >= from);
+            });
+        }
+
+        // Show message if blocked
+        function showBlockedMessage(msg) {
+            if (!modalBlockedMessage) {
+                modalBlockedMessage = document.createElement('div');
+                modalBlockedMessage.style.color = '#b91c1c';
+                modalBlockedMessage.style.fontSize = '13px';
+                modalBlockedMessage.style.marginTop = '8px';
+                $modalContent.appendChild(modalBlockedMessage);
+            }
+            modalBlockedMessage.textContent = msg;
+        }
+        function clearBlockedMessage() {
+            if (modalBlockedMessage) modalBlockedMessage.textContent = '';
+        }
+
+        // Attach validation to modal date inputs
+        setTimeout(() => {
+            const checkinInput = $("mvCheckin");
+            const checkoutInput = $("mvCheckout");
+            if (!checkinInput || !checkoutInput) return;
+            checkinInput.addEventListener("change", () => {
+                clearBlockedMessage();
+                if (isDateBlocked(checkinInput.value)) {
+                    checkinInput.value = '';
+                    showBlockedMessage('Selected check-in date is unavailable.');
+                } else if (checkoutInput.value && isRangeBlocked(checkinInput.value, checkoutInput.value)) {
+                    checkoutInput.value = '';
+                    showBlockedMessage('Selected date range overlaps an unavailable booking.');
+                }
+            });
+            checkoutInput.addEventListener("change", () => {
+                clearBlockedMessage();
+                if (isDateBlocked(checkoutInput.value)) {
+                    checkoutInput.value = '';
+                    showBlockedMessage('Selected check-out date is unavailable.');
+                } else if (checkinInput.value && isRangeBlocked(checkinInput.value, checkoutInput.value)) {
+                    checkoutInput.value = '';
+                    showBlockedMessage('Selected date range overlaps an unavailable booking.');
+                }
+            });
+        }, 300);
+
+        // Revalidate on reserve
+        const reserveBtn = $("mvReserveBtn");
+        if (reserveBtn) {
+            reserveBtn.addEventListener("click", () => {
+                clearBlockedMessage();
+                const checkinInput = $("mvCheckin");
+                const checkoutInput = $("mvCheckout");
+                if (checkinInput && checkoutInput && checkinInput.value && checkoutInput.value) {
+                    if (isRangeBlocked(checkinInput.value, checkoutInput.value)) {
+                        showBlockedMessage('Selected date range overlaps an unavailable booking.');
+                        checkinInput.value = '';
+                        checkoutInput.value = '';
+                        return;
+                    }
+                }
+            });
+        }
+
         renderModalBookingWidget();
     }
 
