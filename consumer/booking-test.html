@@ -976,63 +976,63 @@
     }
 
     function renderCards(list) {
-        // AIRBNB-INSPIRED UI START
         ensureSelectedPropertyId(list);
         const availabilityById = window.mvAvailabilityById || {};
         const favs = getFavs();
-        const parentOrder = ["Casa Victoria", "Vista Victoria"];
+        const parentCandidates = (window.mvParentCandidates || []).filter(Boolean);
         const names = list.map((item) => item.name || "").filter(Boolean);
-        const parentSet = new Set(
-            names.filter((name) => names.some((other) => other !== name && other.startsWith(`${name} `)))
-        );
-        const groups = {};
+        const derivedParents = parentCandidates.length
+            ? parentCandidates
+            : names.filter((name) => names.some((other) => other !== name && other.startsWith(`${name} `)));
+        const parentSet = new Set(derivedParents);
+        // Removed debug summary + replaced fallback group with parent property headers.
+        const desiredParentOrder = ["Casa Victoria", "Vista Victoria"];
+        const sortedParents = desiredParentOrder.filter((name) => derivedParents.includes(name));
+        const groups = new Map();
+
         list.forEach((item) => {
             const name = item.name || "";
             if (parentSet.has(name)) return;
             const availability = availabilityById[String(item.id)];
             if (availability?.available === false) return;
-            const parentName = parentOrder.find((parent) => name.startsWith(`${parent} `));
-            if (!parentName) return;
-            if (!groups[parentName]) groups[parentName] = [];
-            groups[parentName].push(item);
+            const matches = sortedParents.filter((parentName) => name.startsWith(`${parentName} `));
+            if (!matches.length) return;
+            const parentName = matches.sort((a, b) => b.length - a.length)[0];
+            if (!groups.has(parentName)) groups.set(parentName, []);
+            groups.get(parentName).push(item);
         });
-        // Airbnb-inspired card markup
+
         const cardMarkup = (p) => `
-            <div class="mv-card airbnb-card" data-id="${p.id}" data-property-id="${getPropertyId(p)}" data-apartment-id="${p.id}">
-                <div class="mv-card__img-wrapper">
-                    <img class="mv-card__img" src="${p.img}" alt="${p.name}" loading="eager"
-                         onerror="this.onerror=null;this.style.opacity=0.7;this.style.filter='grayscale(1)';">
-                    <button class="mv-heart${favs.has(getPropertyId(p)) ? " is-saved" : ""}" data-heart="1" data-id="${p.id}" data-property-id="${getPropertyId(p)}" data-on="${favs.has(getPropertyId(p)) ? 1 : 0}" aria-label="Save">
-                        ${favs.has(getPropertyId(p)) ? "♥" : "♡"}
-                    </button>
+            <div class="mv-card" data-id="${p.id}" data-property-id="${getPropertyId(p)}" data-apartment-id="${p.id}">
+                <div class="mv-heart${favs.has(getPropertyId(p)) ? " is-saved" : ""}" data-heart="1" data-id="${p.id}" data-property-id="${getPropertyId(p)}" data-on="${favs.has(getPropertyId(p)) ? 1 : 0}">
+                    ${favs.has(getPropertyId(p)) ? "♥" : "♡"}
                 </div>
+                <img src="${p.img}" alt="${p.name}" loading="eager"
+                         onerror="this.onerror=null;this.style.opacity=0.7;this.style.filter='grayscale(1)';">
                 <div class="mv-card__body">
-                    <h3 class="mv-card__title">${p.name}</h3>
+                    <div class="mv-card__title">${p.name}</div>
                     <div class="mv-card__meta">
                         <span>Sleeps ${p.sleeps}</span>
-                        <span>${p.tagline || ""}</span>
+                        <span>Select dates to see price &amp; availability</span>
                     </div>
-                    <div class="mv-card__price">
-                        Select dates to see price &amp; availability
-                    </div>
+                    <div class="mv-card__tag">${p.tagline || ""}</div>
                 </div>
             </div>
         `;
-        // Render grouped UI
+
         $results.classList.add("mv-grouped");
-        $results.innerHTML = parentOrder.map((parentName) => {
-            const children = (groups[parentName] || []).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-            if (!children.length) return "";
-            return `
-                <section class="property-group airbnb-group">
-                  <h2 class="property-header airbnb-header">${parentName}</h2>
-                  <div class="property-cards airbnb-cards-grid">
-                    ${children.map(cardMarkup).join("")}
-                  </div>
-                </section>
-            `;
-        }).join("");
-        // AIRBNB-INSPIRED UI END
+        $results.innerHTML = `
+            ${sortedParents.map((parentName) => {
+                const children = (groups.get(parentName) || []).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+                if (!children.length) return "";
+                return `
+                    <h3 class="group-header">${parentName}</h3>
+                    <div class="mv-grid mv-group-grid">
+                        ${children.map(cardMarkup).join("")}
+                    </div>
+                `;
+            }).join("")}
+        `;
     }
 
     function updateSavedCount(isActive = false) {
@@ -1163,7 +1163,6 @@
     async function checkAvailability() {
         const checkIn = $("mvCheckin").value;
         const checkOut = $("mvCheckout").value;
-        const guests = $("mvGuests").value;
         const apartmentId = window.mvSelectedApartmentId;
 
         if (!apartmentId) {
@@ -1181,14 +1180,28 @@
         $availabilityPrice.textContent = "";
 
         try {
+            // Ensure apartmentId is a finite number
+            const apartmentIdNum = Number(apartmentId);
+            // Ensure dates are YYYY-MM-DD
+            const toYYYYMMDD = (dateStr) => {
+                const d = new Date(dateStr);
+                if (isNaN(d)) return "";
+                return d.toISOString().slice(0, 10);
+            };
+            const arrival = toYYYYMMDD(checkIn);
+            const departure = toYYYYMMDD(checkOut);
             const params = new URLSearchParams({
-                apartmentId: String(apartmentId),
-                checkIn,
-                checkOut,
-                guests: String(guests),
+                apartmentId: String(apartmentIdNum),
+                arrival,
+                departure
             });
-            console.log("[availability params]", { apartmentId, checkIn, checkOut, guests });
-            const response = await fetch(`https://maravilla-smoobu-proxy.vercel.app/api/smoobu/availability?${params.toString()}`);
+            const url = `https://maravilla-smoobu-proxy.vercel.app/api/smoobu/availability?${params.toString()}`;
+            console.log("[availability request]", {
+                url,
+                params: Object.fromEntries(params.entries())
+            });
+            console.log('[AVAILABILITY URL]', url);
+            const response = await fetch(url);
             if (!response.ok) {
                 const errText = await response.text();
                 console.error("[availability error]", response.status, errText);
@@ -1247,11 +1260,12 @@
             try {
                 const params = new URLSearchParams({
                     apartmentId: String(apartmentId),
-                    checkIn,
-                    checkOut,
-                    guests: String(guests)
+                    arrival: checkIn,
+                    departure: checkOut
                 });
-                const resp = await fetch(`${API_BASE}/api/smoobu/availability?${params.toString()}`);
+                const url = `${API_BASE}/api/smoobu/availability?${params.toString()}`;
+                console.log('[AVAILABILITY URL]', url);
+                const resp = await fetch(url);
                 if (!resp.ok) {
                     const errText = await resp.text();
                     console.error("[availability error]", resp.status, errText);

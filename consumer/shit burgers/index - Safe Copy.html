@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -447,7 +446,6 @@
       color: #6b4eff;
       text-decoration: underline;
   </style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 </head>
 <body>
   <div class="mv-container">
@@ -497,11 +495,11 @@
         <form class="booking-modal__form" autocomplete="off">
           <div class="booking-modal__row">
             <label>Check-in</label>
-            <input type="text" name="checkin" required placeholder="Check-in" />
+            <input type="date" name="checkin" required />
           </div>
           <div class="booking-modal__row">
             <label>Check-out</label>
-            <input type="text" name="checkout" required placeholder="Check-out" />
+            <input type="date" name="checkout" required />
           </div>
           <div class="booking-modal__row">
             <label>Guests</label>
@@ -516,7 +514,6 @@
               <option value="8">8</option>
             </select>
           </div>
-          <div class="booking-modal__summary" style="display:none; margin:12px 0; font-size:14px; line-height:1.5;"></div>
           <button type="submit" class="booking-modal__cta">Check availability</button>
         </form>
         <a class="booking-modal__link" href="#" target="_blank" rel="noopener">Open full property page</a>
@@ -526,10 +523,12 @@
   <script>
         // Add clear/reset behavior for homepage state
         document.querySelector('.mv-clear-btn').addEventListener('click', function() {
-          // Clear both top-bar date inputs
-          const dateInputs = document.querySelectorAll('.mv-search-bar input[type="date"]');
-          dateInputs.forEach(input => input.value = '');
+          // Clear date inputs
+          const checkinInput = document.querySelector('.mv-search-bar input[type="date"]:nth-child(1)');
+          const checkoutInput = document.querySelector('.mv-search-bar input[type="date"]:nth-child(2)');
           const guestsSelect = document.querySelector('.mv-search-bar select');
+          if (checkinInput) checkinInput.value = '';
+          if (checkoutInput) checkoutInput.value = '';
           if (guestsSelect) guestsSelect.selectedIndex = 0;
           // Restore all properties visible and default card copy/pricing
           const grouped = groupUnitsByParent(PROPERTIES);
@@ -538,59 +537,6 @@
             renderCards(section, grouped[title] || [], null, null);
           });
         });
-        function updateBookingSummary() {
-  const summary = document.querySelector('.booking-modal__summary');
-  const checkinField = document.querySelector('.booking-modal__form input[name="checkin"]');
-  const checkoutField = document.querySelector('.booking-modal__form input[name="checkout"]');
-
-  if (!summary || !checkinField || !checkoutField || !window.modalProperty) {
-    return;
-  }
-
-  const checkin = checkinField.value;
-  const checkout = checkoutField.value;
-
-  if (!checkin || !checkout) {
-    summary.style.display = 'none';
-    summary.innerHTML = '';
-    return;
-  }
-
-  const start = new Date(checkin);
-  const end = new Date(checkout);
-  const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-
-  if (nights <= 0) {
-    summary.style.display = 'none';
-    summary.innerHTML = '';
-    return;
-  }
-
-  const nightly =
-  Number(window.modalProperty.baseNightly) ||
-  Number(window.modalProperty.price) ||
-  Number(window.modalProperty.nightly) ||
-  Number(window.modalProperty.rate) ||
-  0;
-  console.log('[SUMMARY PRICE SOURCE]', window.modalProperty);
-  const total = nightly * nights;
-
-  summary.innerHTML = `
-    <strong>$${nightly}</strong> / night<br>
-    ${nights} nights<br>
-    <strong>Total: $${total}</strong>
-  `;
-  summary.style.display = 'block';
-}
-
-document.addEventListener('change', function (e) {
-  if (
-    e.target.matches('.booking-modal__form input[name="checkin"]') ||
-    e.target.matches('.booking-modal__form input[name="checkout"]')
-  ) {
-    updateBookingSummary();
-  }
-});
     const API_BASE = "https://maravilla-smoobu-proxy.vercel.app";
     const PROPERTIES = [
       {
@@ -600,8 +546,7 @@ document.addEventListener('change', function (e) {
         tagline: "2BR • 2 Bath • 1.5 blocks to the beach",
         img: "https://images.squarespace-cdn.com/content/v1/56c4c3281bbee0fde9e882cf/1726259424715-7Q01O05WF5VTOAGY4PFX/Casa%2BVictoria%2B-%2BApartment%2BD%2B008.jpg",
         url: "https://www.maravillanayarit.com/patio-villa-a",
-        baseNightly: 220,
-        blockedDates: ['2026-03-18', '2026-03-19', '2026-03-25']
+        baseNightly: 220
       },
       {
         id: 3155591,
@@ -610,8 +555,7 @@ document.addEventListener('change', function (e) {
         tagline: "2BR • 2 Bath • Private balcony",
         img: "https://images.squarespace-cdn.com/content/v1/56c4c3281bbee0fde9e882cf/1639429044647-Q73Y374R2VURECZ1SGM9/PDP03935.jpg",
         url: "https://www.maravillanayarit.com/unit-c-upper",
-        baseNightly: 180,
-        blockedDates: []
+        baseNightly: 180
       },
       {
         id: 3155586,
@@ -620,8 +564,7 @@ document.addEventListener('change', function (e) {
         tagline: "2BR • 2 Bath • Upper unit",
         img: "https://images.squarespace-cdn.com/content/v1/56c4c3281bbee0fde9e882cf/1639429152074-QH8ZZ2TNPNALMPDN3W8A/PDP03786.jpg",
         url: "https://www.maravillanayarit.com/unit-d-upper",
-        baseNightly: 320,
-        blockedDates: []
+        baseNightly: 320
       },
       {
         id: 3155576,
@@ -630,8 +573,7 @@ document.addEventListener('change', function (e) {
         tagline: "Townhome • Great for families",
         img: "https://images.squarespace-cdn.com/content/v1/56c4c3281bbee0fde9e882cf/1618930764543-DE7D7M9F3PWYIDWR51PK/DSC08761sm.jpg",
         url: "https://www.maravillanayarit.com/vista-victoria-town-house-1",
-        baseNightly: 210,
-        blockedDates: []
+        baseNightly: 210
       }
     ];
 
@@ -794,7 +736,6 @@ document.addEventListener('change', function (e) {
         return `
         <div class="airbnb-card listing-card"
           data-unit-id="${unit.id}"
-          data-apartment-id="${unit.apartmentId || unit.id || ''}"
           data-title="${unit.name.replace(/^.*?—\s*/, '')}"
           data-image="${unit.img}"
           data-meta="${unit.tagline} · Sleeps ${unit.sleeps}"
@@ -856,26 +797,6 @@ document.addEventListener('change', function (e) {
     const modalTitle = modal.querySelector('.booking-modal__title');
     const modalMeta = modal.querySelector('.booking-modal__meta');
     const modalForm = modal.querySelector('.booking-modal__form');
-    // Modal Flatpickr instance variables
-    let modalCheckinFlatpickr = null;
-    let modalCheckoutFlatpickr = null;
-    // Flatpickr initialization for modal inputs (last known-good baseline)
-    const modalCheckinInput = modalForm.querySelector('input[name="checkin"]');
-    const modalCheckoutInput = modalForm.querySelector('input[name="checkout"]');
-    // ...existing code...
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
-    <script>
-    // Modal Flatpickr initialization (runs after library loads)
-    const modalCheckinInput = document.querySelector('.booking-modal__form input[name="checkin"]');
-    const modalCheckoutInput = document.querySelector('.booking-modal__form input[name="checkout"]');
-    console.log('[MODAL FLATPICKR INIT]', !!modalCheckinInput, typeof flatpickr);
-    if (modalCheckinInput && typeof flatpickr === 'function') {
-      window.modalCheckinFlatpickr = flatpickr(modalCheckinInput, {});
-    }
-    if (modalCheckoutInput && typeof flatpickr === 'function') {
-      window.modalCheckoutFlatpickr = flatpickr(modalCheckoutInput, {});
-    }
-    </script>
     // Modal availability result UI
     let modalResultDiv = modal.querySelector('.booking-modal__result');
     if (!modalResultDiv) {
@@ -896,20 +817,73 @@ document.addEventListener('change', function (e) {
       modalForm.appendChild(hiddenIdInput);
     }
 
-    modalForm.addEventListener('submit', function(e) {
+    modalForm.addEventListener('submit', async function(e) {
       e.preventDefault();
-      // No search/availability request; just log booking intent
-      const idInput = document.getElementById('modalApartmentId');
-      const apartmentId = idInput ? idInput.value : '';
+      // Robust loading state
+      modalResultDiv.innerHTML = `<span style='color:#888;'>Checking availability...</span>`;
+      // Safely read apartmentId from deterministic hidden input
+      const apartmentIdInput = document.getElementById('modalApartmentId');
+      const apartmentId = apartmentIdInput ? apartmentIdInput.value : '';
       const checkInInput = modalForm.querySelector('input[name="checkin"]');
       const checkOutInput = modalForm.querySelector('input[name="checkout"]');
       const guestsInput = modalForm.querySelector('select[name="guests"]');
       const arrival = checkInInput ? checkInInput.value : '';
       const departure = checkOutInput ? checkOutInput.value : '';
       const guests = guestsInput ? guestsInput.value : '';
-      console.log('[BOOKING SUBMIT]', { apartmentId, arrival, departure, guests });
-      // Optionally show a simple confirmation or clear modalResultDiv
-      if (modalResultDiv) modalResultDiv.innerHTML = '<span style="color:#228b22;">Booking flow coming soon</span>';
+      // Stronger validation
+      if (!apartmentId) {
+        modalResultDiv.innerHTML = `<span style='color:#ff385c;'>Please select a property.</span>`;
+        console.log('[MODAL ERROR] Missing apartmentId');
+        return;
+      }
+      if (!arrival || !departure) {
+        modalResultDiv.innerHTML = `<span style='color:#ff385c;'>Please select valid dates.</span>`;
+        console.log('[MODAL ERROR] Missing arrival/departure');
+        return;
+      }
+      if (new Date(arrival) >= new Date(departure)) {
+        modalResultDiv.innerHTML = `<span style='color:#ff385c;'>Check-out must be after check-in.</span>`;
+        console.log('[MODAL ERROR] Invalid date range');
+        return;
+      }
+      if (!guests || isNaN(Number(guests)) || Number(guests) < 1) {
+        modalResultDiv.innerHTML = `<span style='color:#ff385c;'>Please select number of guests.</span>`;
+        console.log('[MODAL ERROR] Invalid guests');
+        return;
+      }
+      try {
+        const params = new URLSearchParams({
+          apartmentId: String(apartmentId),
+          arrival,
+          departure
+        });
+        const url = `${API_BASE}/api/smoobu/availability?${params.toString()}`;
+        console.log('[MODAL AVAILABILITY REQUEST]', url);
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          modalResultDiv.innerHTML = `<span style='color:#ff385c;'>Request error. Please try again.</span>`;
+          console.log('[MODAL ERROR] Request error');
+          return;
+        }
+        const data = await resp.json();
+        const available = data?.available ?? data?.isAvailable ?? data?.availability?.available;
+        const nightlyPrice = data?.nightlyPrice ?? data?.price ?? data?.availability?.price;
+        const totalPrice = data?.totalPrice ?? data?.availability?.totalPrice;
+        // Compact pricing and feedback
+        if (available) {
+          modalResultDiv.innerHTML = `<span style='color:#228b22;'>Available</span>` +
+            (nightlyPrice ? `<br><span style='color:#222;'>Nightly: $${nightlyPrice}</span>` : '') +
+            (totalPrice ? `<br><span style='color:#222;'>Total: $${totalPrice}</span>` : '');
+        } else if (available === false) {
+          modalResultDiv.innerHTML = `<span style='color:#ff385c;'>Unavailable</span>` +
+            (nightlyPrice ? `<br><span style='color:#222;'>Nightly: $${nightlyPrice}</span>` : '');
+        } else {
+          modalResultDiv.innerHTML = `<span style='color:#888;'>Availability status unknown.</span>`;
+        }
+      } catch (err) {
+        modalResultDiv.innerHTML = `<span style='color:#ff385c;'>Request error. Please try again.</span>`;
+        console.log('[MODAL ERROR] Exception', err);
+      }
     });
     const modalLink = modal.querySelector('.booking-modal__link');
     let modalProperty = null;
@@ -934,18 +908,165 @@ document.addEventListener('change', function (e) {
       });
     }
 
+    // --- MODAL ACTIVE UNIT STATE ---
+    let ACTIVE_MODAL_UNIT = null;
+
+    function openBookingModal(unit) {
+      ACTIVE_MODAL_UNIT = unit;
+      console.log('OPEN BOOKING MODAL TEST', unit);
+        // Log card payload
+        console.log('[modal booking state] card payload:', unit);
+        // Map booking unit from unitId
+        let bookingUnit = null;
+        if (unit.unitId) {
+          bookingUnit = unit;
+          console.log('[LIVE MATCH RESULT]', {
+            incomingUnitId: unit?.unitId,
+            bookingUnit
+          });
+          if (bookingUnit) {
+            console.log('[modal booking state] mapped booking unit:', bookingUnit.name);
+          } else {
+            console.warn('[modal booking state] no match for unitId:', unit.unitId);
+          }
+        }
+        // Set hidden apartmentId input for booking
+        const apartmentIdInput = document.getElementById('modalApartmentId');
+        const modal = document.getElementById('bookingModal');
+        if (bookingUnit) {
+  const apartmentId = bookingUnit.apartmentId || bookingUnit.id || '';
+  if (apartmentIdInput) {
+    apartmentIdInput.value = apartmentId;
+    console.log('[LIVE HIDDEN INPUT WRITE]', {
+      modalApartmentIdValue: apartmentIdInput?.value,
+      modalDatasetApartmentId: document.getElementById('bookingModal')?.dataset?.apartmentId || null,
+      activeModalUnit: typeof ACTIVE_MODAL_UNIT !== 'undefined' ? ACTIVE_MODAL_UNIT : null
+    });
+  }
+  if (modal) {
+    modal.dataset.apartmentId = apartmentId;
+  }
+  console.log('[modal booking state] apartmentId set on modal:', apartmentId, bookingUnit);
+} else {
+  if (apartmentIdInput) {
+    apartmentIdInput.value = '';
+  }
+  if (modal) {
+    modal.dataset.apartmentId = '';
+  }
+  console.error('[MODAL ERROR] Could not bind apartmentId in openBookingModal', unit);
+}
+      // ...existing modal open logic...
+      updateModalCalendarUI(ACTIVE_MODAL_UNIT);
+      // ...existing modal rendering logic (title, image, meta, etc.)...
+    }
+
+    function closeModal() {
+      console.log('[modal unit] clear:', ACTIVE_MODAL_UNIT && ACTIVE_MODAL_UNIT.name ? ACTIVE_MODAL_UNIT.name : ACTIVE_MODAL_UNIT);
+      ACTIVE_MODAL_UNIT = null;
+      // ...existing modal close logic...
+    }
+
+    // All modal logic now reads ACTIVE_MODAL_UNIT
+    function getModalBlockedDates(unit) {
+      const rawDates = unit && unit.blockedDates ? unit.blockedDates : [];
+      const blockedDates = getUnavailableDates(rawDates);
+      console.log('[modal unit] used for blocked dates:', unit && unit.name ? unit.name : unit, blockedDates);
+      return blockedDates;
+    }
+
+    function updateModalCalendarUI(unit) {
+      const calendarContainer = document.getElementById('modal-calendar');
+      const today = new Date();
+      let year = today.getFullYear();
+      let month = today.getMonth();
+      if (modalCheckIn) {
+        const inDate = new Date(modalCheckIn);
+        year = inDate.getFullYear();
+        month = inDate.getMonth();
+        console.log('[modal booking state] CTA using:', apartmentId);
+      }
+      const blockedDates = getModalBlockedDates(unit || ACTIVE_MODAL_UNIT);
+      renderModalCalendar(calendarContainer, year, month, blockedDates, unit || ACTIVE_MODAL_UNIT);
+      // ...existing modal field updates...
+    }
+
+    // Reserve/Check availability button logic
+    document.querySelector('.booking-modal__form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      console.log('[modal unit] used for reserve/check availability:', ACTIVE_MODAL_UNIT && ACTIVE_MODAL_UNIT.name ? ACTIVE_MODAL_UNIT.name : ACTIVE_MODAL_UNIT);
+      // ...existing reserve logic using ACTIVE_MODAL_UNIT...
+    });
+    const modalLinkEl = modal.querySelector('.booking-modal__link');
+    let modalPropertyNode = null;
+
+    // Modal check-in/check-out min-date logic
+    const modalCheckinNode = document.querySelector('.booking-modal__form input[name="checkin"]');
+    const modalCheckoutNode = document.querySelector('.booking-modal__form input[name="checkout"]');
+    if (modalCheckin && modalCheckout) {
+      modalCheckinNode.addEventListener('change', function() {
+        const val = modalCheckinNode.value;
+        if (!val) {
+          modalCheckoutNode.min = '';
+          return;
+        }
+        const d = new Date(val);
+        d.setDate(d.getDate() + 1);
+        const minCheckout = d.toISOString().slice(0,10);
+        modalCheckoutNode.min = minCheckout;
+        if (modalCheckoutNode.value && modalCheckoutNode.value < minCheckout) {
+          modalCheckoutNode.value = '';
+        }
+      });
+    }
+
+    function openModal(property) {
+      modalPropertyNode = property;
+      // Log modal open
+      console.log('[OPEN MODAL]', property.id);
+      // Set hidden apartmentId input value deterministically
+      const idInput = document.getElementById('modalApartmentId');
+      if (idInput) idInput.value = property.id;
+      // Modal prefill logic: explicit variable names
+      const mainArrivalInput = document.querySelector('.mv-search-bar input[type="date"]:nth-child(2)');
+      const mainDepartureInput = document.querySelector('.mv-search-bar input[type="date"]:nth-child(3)');
+      const mainGuestsInput = document.querySelector('.mv-search-bar select');
+      const arrivalVal = mainArrivalInput ? mainArrivalInput.value : '';
+      const departureVal = mainDepartureInput ? mainDepartureInput.value : '';
+      const guestsVal = mainGuestsInput ? mainGuestsInput.value : '';
+      console.log('[MAIN SEARCH VALUES]', arrivalVal, departureVal, guestsVal);
+      const modalCheckinInput = modalForm.querySelector('input[name="checkin"]');
+      const modalCheckoutInput = modalForm.querySelector('input[name="checkout"]');
+      const modalGuestsInput = modalForm.querySelector('select[name="guests"]');
+      if (modalCheckinInput) modalCheckinInput.value = arrivalVal;
+      if (modalCheckoutInput) modalCheckoutInput.value = departureVal;
+      if (modalGuestsInput) modalGuestsInput.value = guestsVal;
+      console.log('[MODAL PREFILL]', arrivalVal, departureVal, guestsVal);
+      // Defensive: always clear modal result on open
+      if (modalResultDiv) modalResultDiv.innerHTML = '';
+      // Change modal CTA label based on searched context
+      const modalCTA = modalForm.querySelector('.booking-modal__cta');
+      if (modalCTA) {
+        if (mainArrival && mainArrival.value && mainDeparture && mainDeparture.value && mainGuests && mainGuests.value) {
+          modalCTA.textContent = 'Reserve';
+          console.log('[MODAL CTA MODE] searched-context');
+        } else {
+          modalCTA.textContent = 'Check availability';
+          console.log('[MODAL CTA MODE] fallback');
+        }
+      }
+      modalImg.src = property.img;
+      modalImg.alt = property.name;
+      modalTitle.textContent = property.name.replace(/^.*?—\s*/, '');
+      modalMeta.textContent = `${property.tagline} · Sleeps ${property.sleeps}`;
+      modalLinkEl.href = property.url;
+      modalLinkEl.textContent = 'Open full property page';
+      modal.hidden = false;
+    }
     function closeModal() {
       modal.classList.remove("active");
       modalProperty = null;
       modalForm.reset();
-      // Clear all inline modal styles
-      modal.style.display = 'none';
-      modal.style.position = '';
-      modal.style.inset = '';
-      modal.style.zIndex = '';
-      modal.style.background = '';
-      modal.style.alignItems = '';
-      modal.style.justifyContent = '';
     }
     modalClose.addEventListener('click', closeModal);
     modalBackdrop.addEventListener('click', closeModal);
@@ -953,8 +1074,71 @@ document.addEventListener('change', function (e) {
       if (!modal.hidden && (e.key === 'Escape' || e.key === 'Esc')) closeModal();
     });
     // MODAL CLICK FIX START
-    // Legacy openBookingModal removed (now bypassed)
-    // Legacy modal click handler removed (now bypassed)
+    function openBookingModal(data) {
+      console.log("OPEN FN RUN — VERSION B", data);
+      const modal = document.querySelector('.booking-modal');
+      // Modal prefill: safely assign main search values to modal fields
+      // Correctly inherit homepage search values for modal prefill
+      const searchInputs = document.querySelectorAll('.mv-search-bar input[type="date"]');
+      const modalPrefillArrival = searchInputs[0] ? searchInputs[0].value : '';
+      const modalPrefillDeparture = searchInputs[1] ? searchInputs[1].value : '';
+      const modalPrefillGuests = document.querySelector('.mv-search-bar select');
+      const guestsVal = modalPrefillGuests ? modalPrefillGuests.value : '';
+      console.log('[MAIN SEARCH VALUES]', modalPrefillArrival, modalPrefillDeparture, guestsVal);
+      const modalCheckinInput = modal.querySelector('input[name="checkin"]');
+      const modalCheckoutInput = modal.querySelector('input[name="checkout"]');
+      const modalGuestsInput = modal.querySelector('select[name="guests"]');
+      if (modalCheckinInput) modalCheckinInput.value = modalPrefillArrival;
+      if (modalCheckoutInput) modalCheckoutInput.value = modalPrefillDeparture;
+      if (modalGuestsInput) modalGuestsInput.value = guestsVal;
+      console.log('[MODAL PREFILL AFTER]', modalCheckinInput ? modalCheckinInput.value : '', modalCheckoutInput ? modalCheckoutInput.value : '', modalGuestsInput ? modalGuestsInput.value : '');
+      // UI-only booking CTA state update
+      const modalCTA = modal.querySelector('.booking-modal__cta');
+      let helperDiv = modal.querySelector('.booking-modal__helper');
+      if (!helperDiv) {
+        helperDiv = document.createElement('div');
+        helperDiv.className = 'booking-modal__helper';
+        helperDiv.style.margin = '8px 0 0 0';
+        helperDiv.style.fontSize = '13px';
+        helperDiv.style.color = '#888';
+        modalCTA.parentNode.insertBefore(helperDiv, modalCTA.nextSibling);
+      }
+      if (modalPrefillArrival && modalPrefillDeparture && guestsVal) {
+        modalCTA.textContent = 'Reserve';
+        modalCTA.disabled = true;
+        helperDiv.textContent = 'Reserve flow coming next';
+        console.log('[MODAL CTA MODE] reserve-disabled');
+      } else {
+        modalCTA.textContent = 'Check availability';
+        modalCTA.disabled = false;
+        helperDiv.textContent = '';
+      }
+      modal.querySelector('.booking-modal__img').src = data.image;
+      modal.querySelector('.booking-modal__img').alt = data.title;
+      modal.querySelector('.booking-modal__title').textContent = data.title;
+      modal.querySelector('.booking-modal__meta').textContent = data.meta;
+      modal.classList.add("active");
+      // TEMPORARY: Force modal visible with inline styles
+      modal.style.display = "flex";
+      modal.style.position = "fixed";
+      modal.style.inset = "0";
+      modal.style.zIndex = "9999";
+      modal.style.background = "rgba(0,0,0,0.45)";
+      modal.style.alignItems = "center";
+      modal.style.justifyContent = "center";
+    }
+    document.addEventListener("click", (event) => {
+      const modalClose = event.target.closest(".booking-modal__close");
+      if (modalClose) {
+        const modal = document.querySelector(".booking-modal");
+        if (modal) {
+          modal.removeAttribute("style");
+          modal.classList.remove("active");
+        }
+        return;
+      }
+      // ...existing code...
+    });
     // MODAL CLICK FIX END
     // Update card markup in renderCards
     function renderCards(section, units, checkIn, checkOut) {
@@ -979,7 +1163,6 @@ document.addEventListener('change', function (e) {
         return `
         <div class="airbnb-card listing-card"
           data-unit-id="${unit.id}"
-          data-apartment-id="${unit.apartmentId || unit.id || ''}"
           data-title="${unit.name.replace(/^.*?—\s*/, '')}"
           data-image="${unit.img}"
           data-meta="${unit.tagline} · Sleeps ${unit.sleeps}"
@@ -1006,40 +1189,28 @@ document.addEventListener('change', function (e) {
     // Robust event delegation for modal opening
     // Only triggers modal for card clicks, not heart button
     // MODAL CLICK FIX END
-    // Restore openModal function
-    function openModal(property) {
-      // Set modalProperty for use elsewhere
-      window.modalProperty = property;
-      // Populate modal fields
-      modalImg.src = property.img || '';
-      modalTitle.textContent = property.name || '';
-      modalMeta.textContent = property.tagline || '';
-      // Set hidden apartmentId input
-      const idInput = document.getElementById('modalApartmentId');
-      if (idInput) idInput.value = property.id || property.apartmentId || '';
-      // Show modal
-      modal.classList.add('active');
-      modal.style.display = 'flex';
-    }
+      /* MODAL INIT ORDER FIX START */
+      console.log("REGISTERING DOC CLICK");
+      document.addEventListener("click", (event) => {
+        console.log("DOC CLICK", event.target);
+        const favoriteButton = event.target.closest("button.mv-heart, .favorite-btn, .card-favorite, .heart-btn");
+        console.log("FAVORITE MATCH", favoriteButton);
+        if (favoriteButton) return;
 
-    /* MODAL INIT ORDER FIX START */
-    // Only openModal is now used for modal open
-    document.addEventListener("click", (event) => {
-      const favoriteButton = event.target.closest("button.mv-heart, .favorite-btn, .card-favorite, .heart-btn");
-      if (favoriteButton) return;
-      const card = event.target.closest(".airbnb-card.listing-card");
-      if (!card) return;
-      // Resolve full property object from PROPERTIES
-      const unitId = card.dataset.unitId || card.dataset.apartmentId || '';
-      const property = PROPERTIES.find(
-        p => String(p.id) === unitId || String(p.apartmentId) === unitId
-      );
-      console.log('[OPEN MODAL FULL PROPERTY]', property);
-      if (property) openModal(property);
-    });
-    /* MODAL INIT ORDER FIX END */
+        const card = event.target.closest(".airbnb-card.listing-card");
+        console.log("CARD MATCH", card);
+        if (!card) return;
+
+        console.log("OPEN MODAL CALL");
+        openBookingModal({
+          title: card.dataset.title || "",
+          image: card.dataset.image || "",
+          meta: card.dataset.meta || "",
+          unitId: card.dataset.unitId || ""
+        });
+      });
+      /* MODAL INIT ORDER FIX END */
     // BOOKING MODAL END
   </script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.js"></script>
 </body>
 </html>

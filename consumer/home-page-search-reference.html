@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>maraVilla V3 — Homepage Search Prototype</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f7f7; margin: 0; }
+    .mv-search-bar { display: flex; gap: 0; background: #fff; border-radius: 999px; box-shadow: 0 4px 18px rgba(0,0,0,0.08); padding: 10px 18px; margin: 48px auto 36px auto; align-items: center; border: none; min-height: 64px; max-width: 845px; }
+    .mv-search-bar input, .mv-search-bar select { border: none; background: transparent; font-size: 16px; outline: none; height: 44px; margin: 0 8px; }
+    .mv-search-btn { background: #ff385c; color: #fff; font-weight: 700; border: none; border-radius: 999px; padding: 0 24px; height: 44px; cursor: pointer; }
+    .mv-clear-btn { background: #f7f7f7; color: #888; font-weight: 500; font-size: 15px; border: none; border-radius: 16px; height: 44px; padding: 0 22px; }
+  </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+</head>
+<body>
+  <div class="mv-search-bar">
+    <input id="searchCheckIn" type="text" placeholder="Check In" readonly style="width:190px;">
+    <input id="searchCheckOut" type="text" placeholder="Check Out" readonly style="width:190px;">
+    <select id="searchGuests" style="width:110px;">
+      <option value="1">1 guest</option>
+      <option value="2">2 guests</option>
+      <option value="3">3 guests</option>
+      <option value="4">4 guests</option>
+      <option value="5">5 guests</option>
+      <option value="6">6 guests</option>
+    </select>
+    <button class="mv-search-btn" id="searchBtn" style="min-width:120px;">Search</button>
+    <button type="button" class="mv-clear-btn" style="min-width:80px;margin-left:16px;background:#f7f7f7;color:#888;font-weight:500;font-size:15px;border:none;border-radius:16px;height:44px;padding:0 22px;">Clear</button>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script>
+    const homepageSearchState = {
+      checkIn: '',
+      checkOut: '',
+      guests: ''
+    };
+
+    // Flatpickr for check-in
+    flatpickr(document.getElementById('searchCheckIn'), {
+      dateFormat: 'Y-m-d',
+      onChange: function(selectedDates, dateStr, instance) {
+        homepageSearchState.checkIn = selectedDates.length ? selectedDates[0].toISOString().slice(0,10) : '';
+        console.log('[V3 HOMEPAGE STATE CHANGE]', { ...homepageSearchState });
+      }
+    });
+
+    // Flatpickr for check-out
+    flatpickr(document.getElementById('searchCheckOut'), {
+      dateFormat: 'Y-m-d',
+      onChange: function(selectedDates, dateStr, instance) {
+        homepageSearchState.checkOut = selectedDates.length ? selectedDates[0].toISOString().slice(0,10) : '';
+        console.log('[V3 HOMEPAGE STATE CHANGE]', { ...homepageSearchState });
+      }
+    });
+
+    document.getElementById('searchGuests').addEventListener('change', e => {
+      homepageSearchState.guests = e.target.value;
+      console.log('[V3 HOMEPAGE STATE CHANGE]', { ...homepageSearchState });
+    });
+
+    document.getElementById('searchBtn').addEventListener('click', () => {
+      console.log('[V3 HOMEPAGE SEARCH CLICK]', { ...homepageSearchState });
+    });
+
+    // Clear button logic
+    document.querySelector('.mv-clear-btn').addEventListener('click', () => {
+      homepageSearchState.checkIn = '';
+      homepageSearchState.checkOut = '';
+      homepageSearchState.guests = '1';
+      // Clear Flatpickr selections
+      const checkInFp = document.getElementById('searchCheckIn')._flatpickr;
+      const checkOutFp = document.getElementById('searchCheckOut')._flatpickr;
+      if (checkInFp) checkInFp.clear();
+      if (checkOutFp) checkOutFp.clear();
+      // Reset visible fields
+      document.getElementById('searchCheckIn').value = '';
+      document.getElementById('searchCheckOut').value = '';
+      document.getElementById('searchGuests').value = '1';
+      console.log('[V3 HOMEPAGE CLEAR]', { ...homepageSearchState });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>maraVilla Booking UI v3 — Static Shell</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f7f7; margin: 0; }
+    .mv-search-bar { display: flex; gap: 0; background: #fff; border-radius: 999px; box-shadow: 0 4px 18px rgba(0,0,0,0.08); padding: 10px 18px; margin: 32px auto 36px auto; align-items: center; border: none; min-height: 64px; max-width: 840px; }
+    .mv-search-bar input, .mv-search-bar select { border: none; background: transparent; font-size: 16px; outline: none; height: 44px; margin: 0 8px; }
+    .mv-search-btn { background: #ff385c; color: #fff; font-weight: 700; border: none; border-radius: 999px; padding: 0 24px; height: 44px; cursor: pointer; }
+    .mv-section { margin: 32px auto; max-width: 900px; }
+    .mv-section-title { font-size: 2rem; margin-bottom: 18px; }
+    .mv-card-grid { display: flex; flex-wrap: wrap; gap: 24px; }
+    .mv-card { background: #fff; border-radius: 16px; box-shadow: 0 4px 18px rgba(0,0,0,0.08); width: 260px; overflow: hidden; cursor: pointer; transition: box-shadow .18s; }
+    .mv-card__img { width: 100%; height: 160px; object-fit: cover; }
+    .mv-card__body { padding: 18px; }
+    .mv-card__title { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; }
+    .mv-card__meta { color: #888; font-size: 1rem; margin-bottom: 8px; }
+    .mv-card__price { color: #222; font-size: 1.1rem; font-weight: 500; }
+    .booking-modal { display: none; position: fixed; inset: 0; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); z-index: 1000; }
+    .booking-modal.active { display: flex; }
+    .booking-modal__dialog { width: min(420px, 94vw); background: #fff; border-radius: 18px; box-shadow: 0 30px 80px rgba(0,0,0,.25); overflow: hidden; position: relative; }
+    .booking-modal__close { position: absolute; top: 16px; right: 16px; width: 44px; height: 44px; font-size: 24px; color: #ff385c; background: #fff; border: 1px solid #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .booking-modal__close:hover { background: #ff385c; color: #fff; }
+    .booking-modal__img { width: 100%; height: 180px; object-fit: cover; }
+    .booking-modal__body { padding: 24px; }
+    .booking-modal__title { font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
+    .booking-modal__meta { color: #888; font-size: 1rem; margin-bottom: 8px; }
+    .booking-modal__dates { margin-bottom: 16px; }
+    .booking-modal__cta { width: 100%; padding: 12px 0; font-size: 1.1rem; font-weight: 600; background: #ff385c; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+    .booking-modal__cta:disabled { background: #ccc; color: #fff; cursor: not-allowed; }
+  </style>
+  <!-- Flatpickr CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+</head>
+<body>
+  <!-- SEARCH BAR AREA -->
+  <div class="mv-search-bar">
+    <input id="searchCheckIn" type="text" placeholder="Check In" readonly style="width:190px;">
+    <input id="searchCheckOut" type="text" placeholder="Check Out" readonly style="width:190px;">
+    <select id="searchGuests" style="width:110px;">
+      <option value="1">1 guest</option>
+      <option value="2">2 guests</option>
+      <option value="3">3 guests</option>
+      <option value="4">4 guests</option>
+      <option value="5">5 guests</option>
+      <option value="6">6 guests</option>
+    </select>
+    <button class="mv-search-btn" id="searchBtn" style="min-width:120px;">Search</button>
+    <button type="button" class="mv-clear-btn" style="min-width:80px;margin-left:16px;background:#f7f7f7;color:#888;font-weight:500;font-size:15px;border:none;border-radius:16px;height:44px;padding:0 22px;">Clear</button>
+  </div>
+
+  <!-- PROPERTY SECTIONS -->
+  <div class="mv-section">
+    <div class="mv-section-title">Casa Victoria</div>
+    <div class="mv-card-grid">
+      <div class="mv-card" data-unit-id="villa-a">
+        <img class="mv-card__img" src="https://picsum.photos/id/1018/400/300" alt="Villa A">
+        <div class="mv-card__body">
+          <div class="mv-card__title">Villa A</div>
+          <div class="mv-card__meta">Pool · Sleeps 6</div>
+          <div class="mv-card__price">$220 / night</div>
+        </div>
+      </div>
+      <div class="mv-card" data-unit-id="villa-c">
+        <img class="mv-card__img" src="https://picsum.photos/id/1025/400/300" alt="Villa C">
+        <div class="mv-card__body">
+          <div class="mv-card__title">Villa C</div>
+          <div class="mv-card__meta">Garden · Sleeps 4</div>
+          <div class="mv-card__price">$180 / night</div>
+        </div>
+      </div>
+      <div class="mv-card" data-unit-id="villa-d">
+        <img class="mv-card__img" src="https://picsum.photos/id/1035/400/300" alt="Villa D">
+        <div class="mv-card__body">
+          <div class="mv-card__title">Villa D</div>
+          <div class="mv-card__meta">Terrace · Sleeps 5</div>
+          <div class="mv-card__price">$210 / night</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mv-section">
+    <div class="mv-section-title">Vista Victoria</div>
+    <div class="mv-card-grid">
+      <div class="mv-card" data-unit-id="town-house-1">
+        <img class="mv-card__img" src="https://picsum.photos/id/1040/400/300" alt="Town House #1">
+        <div class="mv-card__body">
+          <div class="mv-card__title">Town House #1</div>
+          <div class="mv-card__meta">Town · Sleeps 3</div>
+          <div class="mv-card__price">$160 / night</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATIC BOOKING MODAL SHELL -->
+  <div class="booking-modal" id="bookingModal">
+    <div class="booking-modal__dialog">
+      <button class="booking-modal__close" id="modalClose">&times;</button>
+      <img class="booking-modal__img" id="modalImg" src="https://picsum.photos/id/1018/400/300" alt="Property image">
+      <div class="booking-modal__body">
+        <div class="booking-modal__title" id="modalTitle">Villa A</div>
+        <div class="booking-modal__meta" id="modalMeta">Pool · Sleeps 6</div>
+        <div class="booking-modal__price" id="modalPrice">$220 / night</div>
+        <div class="booking-modal__dates">
+          <label>Date Range</label>
+          <input id="modalDateRange" type="text" placeholder="Select dates" readonly>
+          <label>Guests</label>
+          <select id="modalGuests">
+            <option>1 guest</option>
+            <option>2 guests</option>
+            <option>3 guests</option>
+            <option>4 guests</option>
+            <option>5 guests</option>
+            <option>6 guests</option>
+          </select>
+          <div id="minStayMessage" style="display:none;color:#cc0000;font-size:13px;margin-top:6px;">Two Night Minimum Required</div>
+        </div>
+        <div class="booking-modal__summary" id="modalSummary" style="margin:12px 0 8px 0;font-size:1.05rem;color:#222;"></div>
+        <button class="booking-modal__cta" id="modalCTA">Book</button>
+      </div>
+    </div>
+  </div>
+  <!-- Flatpickr JS -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+</body>
+</html>
+
+<script>
+// Minimal mock unit data
+const UNITS = [
+  {
+    id: 'villa-a',
+    propertyName: 'Casa Victoria',
+    title: 'Villa A',
+    image: 'https://picsum.photos/id/1018/400/300',
+    meta: 'Pool · Sleeps 6',
+    nightlyPrice: 220,
+    blockedDates: ['2026-03-18', '2026-03-19', '2026-03-25']
+  },
+  {
+    id: 'villa-c',
+    propertyName: 'Casa Victoria',
+    title: 'Villa C',
+    image: 'https://picsum.photos/id/1025/400/300',
+    meta: 'Garden · Sleeps 4',
+    nightlyPrice: 180,
+    blockedDates: ['2026-03-22', '2026-03-23']
+  },
+  {
+    id: 'villa-d',
+    propertyName: 'Casa Victoria',
+    title: 'Villa D',
+    image: 'https://picsum.photos/id/1035/400/300',
+    meta: 'Terrace · Sleeps 5',
+    nightlyPrice: 210,
+    blockedDates: []
+  },
+  {
+    id: 'town-house-1',
+    propertyName: 'Vista Victoria',
+    title: 'Town House #1',
+    image: 'https://picsum.photos/id/1040/400/300',
+    meta: 'Town · Sleeps 3',
+    nightlyPrice: 160,
+    blockedDates: ['2026-03-20', '2026-03-21']
+  }
+];
+
+// Modal state
+let selectedUnit = null;
+let flatpickrInstance = null;
+
+function openModal(unit) {
+  selectedUnit = unit;
+  const modal = document.getElementById('bookingModal');
+  modal.classList.add('active');
+  document.getElementById('modalImg').src = unit.image;
+  document.getElementById('modalTitle').textContent = unit.title;
+  document.getElementById('modalMeta').textContent = unit.meta;
+  document.getElementById('modalPrice').textContent = `$${unit.nightlyPrice} / night`;
+  // --- Default modal dates and guests ---
+  const today = new Date();
+  let checkIn = new Date(today);
+  checkIn.setDate(today.getDate() + 1);
+  let checkOut = new Date(checkIn);
+  checkOut.setDate(checkIn.getDate() + 2); // 2 nights after check-in
+  // Find next available 2-night range if blocked
+  if (unit.blockedDates && unit.blockedDates.length > 0) {
+    let found = false;
+    let searchStart = new Date(checkIn);
+    for (let i = 0; i < 30 && !found; i++) { // search up to 30 days ahead
+      let rangeBlocked = false;
+      for (let d = 0; d < 2; d++) {
+        let day = new Date(searchStart);
+        day.setDate(searchStart.getDate() + d);
+        let dayStr = day.toISOString().slice(0,10);
+        if (unit.blockedDates.includes(dayStr)) {
+          rangeBlocked = true;
+          break;
+        }
+      }
+      if (!rangeBlocked) {
+        checkIn = new Date(searchStart);
+        checkOut = new Date(checkIn);
+        checkOut.setDate(checkIn.getDate() + 2);
+        found = true;
+      } else {
+        searchStart.setDate(searchStart.getDate() + 1);
+      }
+    }
+  }
+  const guestsSelect = document.getElementById('modalGuests');
+  guestsSelect.value = 2;
+  // Flatpickr setup
+  if (flatpickrInstance) {
+    flatpickrInstance.destroy();
+  }
+  flatpickrInstance = flatpickr(document.getElementById('modalDateRange'), {
+    mode: 'range',
+    dateFormat: 'Y-m-d',
+    defaultDate: [checkIn.toISOString().slice(0,10), checkOut.toISOString().slice(0,10)],
+    minDate: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
+    disable: unit.blockedDates ? unit.blockedDates.slice() : [],
+    onChange: function(selectedDates, dateStr, instance) {
+      if (selectedDates.length === 2) {
+        document.getElementById('modalDateRange').value = dateStr;
+        // Check for blocked overlap
+        let blocked = false;
+        if (unit.blockedDates && unit.blockedDates.length > 0) {
+          for (let d = 0; d < (selectedDates[1] - selectedDates[0])/(1000*60*60*24); d++) {
+            let day = new Date(selectedDates[0]);
+            day.setDate(selectedDates[0].getDate() + d);
+            let dayStr = day.toISOString().slice(0,10);
+            if (unit.blockedDates.includes(dayStr)) {
+              blocked = true;
+              break;
+            }
+          }
+        }
+        if (blocked) {
+          const minStayMsg = document.getElementById('minStayMessage');
+          if (minStayMsg) {
+            minStayMsg.textContent = 'Selected dates are unavailable';
+            minStayMsg.style.display = '';
+          }
+          document.getElementById('modalCTA').disabled = true;
+          console.log('[V3 BLOCKED DATE HIT]', {
+            id: unit.id,
+            range: dateStr
+          });
+        } else {
+          updateModalSummaryFromFlatpickr(selectedDates[0], selectedDates[1]);
+        }
+        console.log('[V3 FLATPICKR CHANGE]', {
+          id: unit.id,
+          checkIn: selectedDates[0].toISOString().slice(0,10),
+          checkOut: selectedDates[1].toISOString().slice(0,10)
+        });
+      }
+    }
+  });
+  // Set initial summary
+  updateModalSummaryFromFlatpickr(checkIn, checkOut);
+  console.log('[V3 FLATPICKR INIT]', {
+    id: unit.id,
+    checkIn: checkIn.toISOString().slice(0,10),
+    checkOut: checkOut.toISOString().slice(0,10)
+  });
+  console.log('[V3 BLOCKED DATES INIT]', {
+    id: unit.id,
+    blockedDates: unit.blockedDates
+  });
+}
+
+function updateModalSummaryFromFlatpickr(checkInDate, checkOutDate) {
+  const summaryArea = document.getElementById('modalSummary');
+  const ctaBtn = document.getElementById('modalCTA');
+  const unit = selectedUnit;
+  let nights = 0;
+  let total = 0;
+  if (checkInDate && checkOutDate) {
+    nights = Math.max(0, Math.round((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24)));
+    total = nights > 0 ? nights * unit.nightlyPrice : 0;
+  }
+  summaryArea.innerHTML = `${unit ? `$${unit.nightlyPrice} / night` : ''}<br>${nights} night${nights === 1 ? '' : 's'}<br>Total: $${total}`;
+  // Enforce 2-night minimum and toggle message
+  const validMinStay = nights >= 2;
+  ctaBtn.disabled = !validMinStay;
+  const minStayMsg = document.getElementById('minStayMessage');
+  if (minStayMsg) {
+    if (!validMinStay) {
+      minStayMsg.style.display = '';
+    } else {
+      minStayMsg.style.display = 'none';
+    }
+    console.log('[V3 MIN STAY MESSAGE]', {
+      id: unit ? unit.id : null,
+      nights,
+      messageVisible: !validMinStay
+    });
+  }
+}
+
+function closeModal() {
+  selectedUnit = null;
+  document.getElementById('bookingModal').classList.remove('active');
+  if (flatpickrInstance) {
+    flatpickrInstance.destroy();
+    flatpickrInstance = null;
+  }
+  console.log('[V3 CLOSE MODAL]');
+}
+
+// Wire card clicks
+window.addEventListener('DOMContentLoaded', () => {
+  // Card selector hooks
+  document.querySelectorAll('[data-unit-id]').forEach(card => {
+    card.addEventListener('click', () => {
+      const unitId = card.getAttribute('data-unit-id');
+      const unit = UNITS.find(u => u.id === unitId);
+      console.log('[V3 CARD CLICK]', { unitId, unit });
+      const modalRoot = document.getElementById('bookingModal');
+      console.log('[V3 MODAL ROOT]', { modalRoot, modalClass: modalRoot.className });
+      if (unit) openModal(unit);
+    });
+  });
+  // Modal close button
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  // Modal backdrop click
+  document.getElementById('bookingModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+});
+
+</script>
