@@ -1131,15 +1131,16 @@
         // Fetch reservations for selected apartment
         const apartmentId = window.mvSelectedApartmentId;
         if (apartmentId) {
-            fetch(`/api/smoobu/reservations?apartmentId=${encodeURIComponent(apartmentId)}`)
+            fetch(`${API_BASE}/api/smoobu/reservations?apartmentId=${encodeURIComponent(apartmentId)}`)
                 .then(resp => resp.json())
                 .then(data => {
+                    console.log('[RESERVATIONS RESPONSE]', data); // TEMP log for shape verification
                     // TODO: If response shape unclear, verify exact field names
                     // Example expected: data.reservations (array of { arrival, departure })
                     if (Array.isArray(data.reservations)) {
                         modalBlockedRanges = data.reservations.map(r => ({
-                            from: r.arrival || r.from,
-                            to: r.departure || r.to
+                            from: r.arrival,
+                            to: r.departure
                         }));
                     } else {
                         modalBlockedRanges = [];
@@ -1231,7 +1232,32 @@
             });
         }
 
-        renderModalBookingWidget();
+        // Fetch reservations and render calendar with blocked dates
+        const apartmentIdNum = Number(window.mvSelectedApartmentId);
+        if (apartmentIdNum) {
+            fetch(`${API_BASE}/api/smoobu/reservations?apartmentId=${apartmentIdNum}`)
+                .then(resp => resp.json())
+                .then(data => {
+                    // Map reservations to blocked days
+                    let blockedDays = new Set();
+                    if (Array.isArray(data.reservations)) {
+                        data.reservations.forEach(r => {
+                            const from = new Date(r.arrival);
+                            const to = new Date(r.departure);
+                            for (let d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
+                                blockedDays.add(d.toISOString().slice(0,10));
+                            }
+                        });
+                    }
+                    // Render calendar with blockedDays
+                    renderModalBookingWidget(blockedDays);
+                })
+                .catch(() => {
+                    renderModalBookingWidget(new Set());
+                });
+        } else {
+            renderModalBookingWidget(new Set());
+        }
     }
 
     function closeModal() {
@@ -1239,7 +1265,7 @@
     }
 
     // Modal dates are now a clickable field (Airbnb-style) that opens the existing calendar.
-    function renderModalBookingWidget() {
+    function renderModalBookingWidget(blockedDays = new Set()) {
         if ($modal.getAttribute("aria-hidden") !== "false") return;
         const container = $("mvModalBooking");
         if (!container) return;
@@ -1263,6 +1289,48 @@
                 </div>
             </div>
         `;
+
+        // Render custom calendar month with blocked days
+        const calendarMonths = $("mvCalendarMonths");
+        if (calendarMonths) {
+            calendarMonths.innerHTML = "";
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const base = new Date();
+            base.setDate(1);
+            const monthDate = new Date(base.getFullYear(), base.getMonth(), 1);
+            const monthTitle = monthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+            const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
+            const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+
+            const monthEl = document.createElement("div");
+            monthEl.className = "mv-cal__month";
+            monthEl.innerHTML = `
+                <div class="mv-cal__title">${monthTitle}</div>
+                <div class="mv-cal__weekdays">
+                    <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+                </div>
+                <div class="mv-cal__grid"></div>
+            `;
+            const grid = monthEl.querySelector(".mv-cal__grid");
+            for (let i = 0; i < firstDay; i += 1) {
+                grid.appendChild(document.createElement("div"));
+            }
+            for (let day = 1; day <= daysInMonth; day += 1) {
+                const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+                const iso = toISODate(date);
+                const isBlocked = blockedDays.has(iso);
+                const isDisabled = date < today || isBlocked;
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "mv-cal__day";
+                btn.textContent = String(day);
+                btn.dataset.date = iso;
+                if (isDisabled) btn.classList.add("is-disabled");
+                grid.appendChild(btn);
+            }
+            calendarMonths.appendChild(monthEl);
+        }
 
         const cta = $("mvReserveBtn");
         if (cta) cta.textContent = hasDates ? "Reserve" : "Check availability";
