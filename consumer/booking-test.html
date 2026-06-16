@@ -535,8 +535,11 @@
         cursor: pointer;
     }
     .mv-cal__day.is-disabled{
-        opacity: .35;
+        background: #ededed;
+        color: #a3a3a3;
         cursor: not-allowed;
+        border: 1px solid #e0e0e0;
+        opacity: 1;
     }
     .mv-cal__day.is-start,
     .mv-cal__day.is-end{
@@ -897,7 +900,12 @@
             }
             for (let day = 1; day <= daysInMonth; day += 1) {
                 const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
-                const isDisabled = date < today;
+                const blocked = window.__lastGoodBlockedDays || new Set();
+                const yyyy = date.getFullYear();
+                const mm = String(date.getMonth() + 1).padStart(2, "0");
+                const dd = String(date.getDate()).padStart(2, "0");
+                const iso = `${yyyy}-${mm}-${dd}`;
+                const isDisabled = date < today || blocked.has(iso);
                 const isStart = calendarStart && toISODate(date) === toISODate(calendarStart);
                 const isEnd = calendarEnd && toISODate(date) === toISODate(calendarEnd);
                 const inRange = calendarStart && calendarEnd && date > calendarStart && date < calendarEnd;
@@ -1249,7 +1257,7 @@
                             }
                         });
                     }
-                    // Render calendar with blockedDays
+                    // Force visible calendar re-render with blocked days
                     renderModalBookingWidget(blockedDays);
                 })
                 .catch(() => {
@@ -1266,6 +1274,11 @@
 
     // Modal dates are now a clickable field (Airbnb-style) that opens the existing calendar.
     function renderModalBookingWidget(blockedDays = new Set()) {
+            if (blockedDays && blockedDays.size > 0) {
+                window.__lastGoodBlockedDays = blockedDays;
+            } else if (window.__lastGoodBlockedDays && window.__lastGoodBlockedDays.size > 0) {
+                blockedDays = window.__lastGoodBlockedDays;
+            }
         if ($modal.getAttribute("aria-hidden") !== "false") return;
         const container = $("mvModalBooking");
         if (!container) return;
@@ -1317,17 +1330,20 @@
                 grid.appendChild(document.createElement("div"));
             }
             for (let day = 1; day <= daysInMonth; day += 1) {
-                const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
-                const iso = toISODate(date);
-                const isBlocked = blockedDays.has(iso);
-                const isDisabled = date < today || isBlocked;
-                const btn = document.createElement("button");
-                btn.type = "button";
-                btn.className = "mv-cal__day";
-                btn.textContent = String(day);
-                btn.dataset.date = iso;
-                if (isDisabled) btn.classList.add("is-disabled");
-                grid.appendChild(btn);
+                                const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+                                const yyyy = date.getFullYear();
+                                const mm = String(date.getMonth() + 1).padStart(2, "0");
+                                const dd = String(date.getDate()).padStart(2, "0");
+                                const iso = `${yyyy}-${mm}-${dd}`;
+                                const isBlocked = blockedDays.has(iso);
+                                const isDisabled = date < today || isBlocked;
+                                const btn = document.createElement("button");
+                                btn.type = "button";
+                                btn.className = "mv-cal__day";
+                                btn.textContent = String(day);
+                                btn.dataset.date = iso;
+                                if (isDisabled) btn.classList.add("is-disabled");
+                                grid.appendChild(btn);
             }
             calendarMonths.appendChild(monthEl);
         }
