@@ -1,8 +1,8 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/consumer/index.html" },
-    { "source": "/consumer", "destination": "/consumer/index.html" },
-    { "source": "/consumer/", "destination": "/consumer/index.html" },
+    { "source": "/", "destination": "/consumer/booking-test.html" },
+    { "source": "/consumer", "destination": "/consumer/booking-test.html" },
+    { "source": "/consumer/", "destination": "/consumer/booking-test.html" },
     { "source": "/admin", "destination": "/admin/admin-holds.html" },
     { "source": "/admin/", "destination": "/admin/admin-holds.html" }
   ]
