@@ -728,7 +728,7 @@
     // Night selection / arrival-departure validation is deliberately NOT part
     // of U2 (scheduled for U3): the calendar is read-only here.
     const CAL_MONTHS = 2;
-    const calendarByListing = new Map(); // id -> parsed state
+    const calendarByListing = new Map(); // String(id) -> parsed state (keys normalised: ids arrive as numbers from listings and strings from the DOM)
     let calendarRequestSeq = 0;
 
     const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
@@ -787,7 +787,7 @@
     // stay (min/max stay, closed-on-arrival/departure, capacity, lead time,
     // price) is decided by the backend's validated quote (U4) — this check never
     // declares a stay bookable, only "occupied nights clear" or a rejection.
-    const selectionByListing = new Map(); // id -> { start, end }
+    const selectionByListing = new Map(); // String(id) -> { start, end }
     function evaluateStaySelection(start, end, state, todayIso) {
         if (!isIsoDate(start)) return { ok: false, reason: "NO_START" };
         if (start < todayIso) return { ok: false, reason: "PAST_START", night: start };
@@ -817,10 +817,10 @@
 
     async function loadHostawayCalendar(id) {
         const seq = ++calendarRequestSeq;
-        calendarByListing.delete(id); // replace stale state for this listing
+        calendarByListing.delete(String(id)); // replace stale state for this listing
         renderHostawayCalendar(id, { loading: true });
         if (!API_BASE) {
-            calendarByListing.set(id, { status: "error", reason: "NO_BACKEND", nights: new Set(), ranges: [], from: null, to: null, checkedAt: null });
+            calendarByListing.set(String(id), { status: "error", reason: "NO_BACKEND", nights: new Set(), ranges: [], from: null, to: null, checkedAt: null });
             renderHostawayCalendar(id);
             return;
         }
@@ -835,7 +835,7 @@
         }
         // Discard if the user has moved on to another listing or a newer request.
         if (seq !== calendarRequestSeq || String(window.mvSelectedApartmentId) !== String(id)) return;
-        calendarByListing.set(id, state);
+        calendarByListing.set(String(id), state);
         renderHostawayCalendar(id);
     }
 
@@ -845,7 +845,7 @@
         const legend = $("mvHostawayCalendarLegend");
         if (!status || !months) return;
         if (String(window.mvSelectedApartmentId) !== String(id)) return;
-        const state = loading ? null : calendarByListing.get(id) || null;
+        const state = loading ? null : calendarByListing.get(String(id)) || null;
         const todayIso = toISODate(new Date());
 
         status.innerHTML = "";
@@ -919,14 +919,14 @@
 
     /** Two-click selection: check-in (must be an available night), then check-out (any later day). */
     function handleHostawayDayClick(id, iso, dayState) {
-        const sel = selectionByListing.get(id) || { start: null, end: null };
+        const sel = selectionByListing.get(String(id)) || { start: null, end: null };
         const todayIso = toISODate(new Date());
-        const state = calendarByListing.get(id) || null;
+        const state = calendarByListing.get(String(id)) || null;
         let next;
         if (!sel.start || (sel.start && sel.end) || iso <= sel.start) {
             // (re)start a selection: the check-in night itself must be available
             if (dayState !== "available") {
-                selectionByListing.set(id, { start: null, end: null, message: dayState === "unavailable" ? `${fmtShort(iso)} is not available for check-in.` : `${fmtShort(iso)} could not be confirmed — choose another check-in date.` });
+                selectionByListing.set(String(id), { start: null, end: null, message: dayState === "unavailable" ? `${fmtShort(iso)} is not available for check-in.` : `${fmtShort(iso)} could not be confirmed — choose another check-in date.` });
                 applyHostawaySelection(id);
                 return;
             }
@@ -941,7 +941,7 @@
                 next = { start: null, end: null, message: msg };
             }
         }
-        selectionByListing.set(id, next);
+        selectionByListing.set(String(id), next);
         applyHostawaySelection(id);
     }
 
@@ -951,13 +951,13 @@
         const summary = $("mvHostawaySelection");
         if (!months || !summary) return;
         if (String(window.mvSelectedApartmentId) !== String(id)) return;
-        const state = calendarByListing.get(id) || null;
+        const state = calendarByListing.get(String(id)) || null;
         const todayIso = toISODate(new Date());
-        let sel = selectionByListing.get(id) || { start: null, end: null };
+        let sel = selectionByListing.get(String(id)) || { start: null, end: null };
         // A completed selection must still pass against the latest calendar (e.g. after Retry/reload).
         if (sel.start && sel.end) {
             const v = evaluateStaySelection(sel.start, sel.end, state, todayIso);
-            if (!v.ok) { sel = { start: null, end: null, message: `${SELECTION_TEXT[v.reason] || "Selected dates are no longer valid"}${v.night ? ` (${fmtShort(v.night)})` : ""}. Please choose again.` }; selectionByListing.set(id, sel); }
+            if (!v.ok) { sel = { start: null, end: null, message: `${SELECTION_TEXT[v.reason] || "Selected dates are no longer valid"}${v.night ? ` (${fmtShort(v.night)})` : ""}. Please choose again.` }; selectionByListing.set(String(id), sel); }
         }
         months.querySelectorAll(".mv-cal__day--hostaway").forEach((cell) => {
             const d = cell.dataset.date;
@@ -984,7 +984,7 @@
             clear.type = "button";
             clear.className = "mv-btn mv-btn--ghost";
             clear.textContent = "Clear";
-            clear.addEventListener("click", () => { selectionByListing.set(id, { start: null, end: null }); applyHostawaySelection(id); });
+            clear.addEventListener("click", () => { selectionByListing.set(String(id), { start: null, end: null }); applyHostawaySelection(id); });
             summary.appendChild(clear);
         }
     }
