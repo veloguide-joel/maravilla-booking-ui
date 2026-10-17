@@ -569,6 +569,13 @@
     .mv-hcal__selection{ margin-top: 10px; font-size: 13px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .mv-hcal__selection .mv-btn{ padding: 4px 10px; font-size: 12px; }
     .mv-hcal__warn{ color: #b91c1c; }
+    /* U4: quote box and unconfirmed cards */
+    .mv-quote{ margin-top: 10px; font-size: 13px; display:grid; gap: 4px; }
+    .mv-quote__total{ font-weight: 700; font-size: 15px; }
+    .mv-quote__line{ opacity: .85; }
+    .mv-quote__note{ opacity: .7; font-size: 12px; }
+    .mv-quote .mv-btn{ padding: 4px 10px; font-size: 12px; margin-left: 6px; }
+    .mv-card.is-unconfirmed{ opacity: .6; }
     .mv-cal__day.is-blocked, .mv-hcal__swatch.is-blocked{
         background: #fde8ec;
         color: #b91c1c;
@@ -683,7 +690,7 @@
     // the authoritative source; the former hard-coded Smoobu list is gone).
     let PROPERTIES = [];
     const UI_TEXT = {
-        notConnected: "Live availability & pricing not yet connected",
+        notConnected: "Live availability & pricing not yet connected", // legacy label (U1); Hostaway paths are connected as of U4
         noBackend: "This deployment is not configured for live property data.",
         loadFailed: "Properties could not be loaded right now.",
         loading: "Loading properties…"
@@ -942,6 +949,8 @@
             }
         }
         selectionByListing.set(String(id), next);
+        quoteByListing.delete(String(id)); // any change of dates invalidates the previous quote (U4)
+        modalQuoteSeq += 1;
         applyHostawaySelection(id);
     }
 
@@ -984,9 +993,195 @@
             clear.type = "button";
             clear.className = "mv-btn mv-btn--ghost";
             clear.textContent = "Clear";
-            clear.addEventListener("click", () => { selectionByListing.set(String(id), { start: null, end: null }); applyHostawaySelection(id); });
+            clear.addEventListener("click", () => { selectionByListing.set(String(id), { start: null, end: null }); quoteByListing.delete(String(id)); applyHostawaySelection(id); });
             summary.appendChild(clear);
         }
+        // U4: price check for a complete, occupancy-clear selection.
+        if (sel.start && sel.end) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "mv-btn mv-btn--primary";
+            btn.id = "mvHostawayQuoteBtn";
+            btn.textContent = "Check price";
+            btn.addEventListener("click", () => requestModalQuote(id));
+            summary.appendChild(btn);
+        }
+        renderModalQuote(id);
+    }
+
+    // ---- Server-validated quote (Stage F4 / U4) ----
+    // GET /api/booking/quote?id&from&to&guests. The backend decides eligibility
+    // (every night open, min/max stay, closures, capacity, lead time) and only
+    // then prices the stay with Hostaway. The UI shows exactly three states:
+    //   quoted      -> amounts in the response currency (never converted)
+    //   unavailable -> the backend's reasons, no price
+    //   unconfirmed -> "could not be confirmed", no price, never "available"
+    // Malformed payloads, HTTP errors and timeouts are "unconfirmed". A quote is
+    // a price, not a reservation: nothing here holds inventory or checks out.
+    const QUOTE_DECISIONS = new Set(["quoted", "unavailable", "unconfirmed"]);
+    const quoteByListing = new Map();   // String(id) -> { key, result }
+    let modalQuoteSeq = 0;
+    let searchSeq = 0;
+    const UNCONFIRMED = (reason) => ({ state: "unconfirmed", reason });
+    const isMoney = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
+
+    function fmtMoney(amount, currency) {
+        return `${new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount)} ${currency}`;
+    }
+
+    /** Strictly validate a quote payload against the request it answers. Never throws. */
+    function parseQuoteResponse(json, req) {
+        if (!json || typeof json !== "object") return UNCONFIRMED("NOT_AN_OBJECT");
+        if (json.ok !== true) return UNCONFIRMED("NOT_OK");
+        if (!QUOTE_DECISIONS.has(json.decision)) return UNCONFIRMED("BAD_DECISION");
+        if (Number(json.listingId) !== Number(req.id) || json.from !== req.from || json.to !== req.to || Number(json.guests) !== Number(req.guests)) return UNCONFIRMED("ECHO_MISMATCH");
+        const expectedNights = nightsSpan(req.from, req.to);
+        if (!Number.isInteger(json.nights) || json.nights !== expectedNights) return UNCONFIRMED("BAD_NIGHTS");
+        const currency = typeof json.currency === "string" && /^[A-Z]{3}$/.test(json.currency) ? json.currency : null;
+        const checkedAt = typeof json.checkedAt === "string" ? json.checkedAt : null;
+        if (json.decision === "unconfirmed") return { state: "unconfirmed", reason: "BACKEND_UNCONFIRMED", checkedAt };
+        if (json.decision === "unavailable") {
+            if (json.available !== false || !Array.isArray(json.reasons)) return UNCONFIRMED("BAD_UNAVAILABLE");
+            const reasons = json.reasons.filter((r) => r && typeof r === "object" && typeof r.code === "string").map((r) => ({ code: r.code, message: typeof r.message === "string" ? r.message : "" }));
+            if (!reasons.length) return UNCONFIRMED("NO_REASONS");
+            return { state: "unavailable", reasons, currency, checkedAt };
+        }
+        // quoted
+        if (json.available !== true || !currency || !isMoney(json.total) || !isMoney(json.nightlyAverage)) return UNCONFIRMED("BAD_QUOTE");
+        if (!Array.isArray(json.breakdown) || !json.breakdown.length) return UNCONFIRMED("BAD_BREAKDOWN");
+        const breakdown = [];
+        let sum = 0;
+        for (const b of json.breakdown) {
+            if (!b || typeof b !== "object" || typeof b.type !== "string" || typeof b.label !== "string" || typeof b.total !== "number" || !Number.isFinite(b.total)) return UNCONFIRMED("BAD_BREAKDOWN_ITEM");
+            breakdown.push({ type: b.type, label: b.label, total: b.total });
+            sum += b.total;
+        }
+        // Backend contract (F3): breakdown lines are the included components and sum to total.
+        if (Math.abs(Math.round(sum * 100) / 100 - Math.round(json.total * 100) / 100) > 0.01) return UNCONFIRMED("BREAKDOWN_SUM");
+        return { state: "quoted", currency, total: json.total, nightlyAverage: json.nightlyAverage, nights: json.nights, breakdown, checkedAt, note: typeof json.note === "string" ? json.note : "" };
+    }
+
+    async function fetchQuote(req) {
+        if (!API_BASE) return UNCONFIRMED("NO_BACKEND");
+        try {
+            const qs = new URLSearchParams({ id: String(req.id), from: req.from, to: req.to, guests: String(req.guests) });
+            const response = await fetch(`${API_BASE}/api/booking/quote?${qs}`, { method: "GET", cache: "no-store" });
+            if (!response.ok) return UNCONFIRMED(`HTTP_${response.status}`);
+            return parseQuoteResponse(await response.json(), req);
+        } catch (err) {
+            console.error("Quote request failed:", err);
+            return UNCONFIRMED("FETCH_FAILED");
+        }
+    }
+    const currentGuests = () => parseInt($("mvGuests").value, 10) || 1;
+
+    /** Invalidate every in-flight quote (search and modal) and drop cached quotes. Called on any date/guest/search change. */
+    function invalidateQuotes() {
+        searchSeq += 1;
+        modalQuoteSeq += 1;
+        quoteByListing.clear();
+        const sel = String(window.mvSelectedApartmentId || "");
+        if (sel && $modal.getAttribute("aria-hidden") === "false") renderModalQuote(sel);
+    }
+
+    async function requestModalQuote(id) {
+        const sel = selectionByListing.get(String(id));
+        if (!sel || !sel.start || !sel.end) return;
+        const req = { id: Number(id), from: sel.start, to: sel.end, guests: currentGuests() };
+        const key = `${req.from}|${req.to}|${req.guests}`;
+        const seq = ++modalQuoteSeq;
+        quoteByListing.set(String(id), { key, result: { state: "loading" } });
+        renderModalQuote(id);
+        const result = await fetchQuote(req);
+        // Discard if superseded (new selection / guests / listing) or the modal moved on.
+        if (seq !== modalQuoteSeq || String(window.mvSelectedApartmentId) !== String(id)) return;
+        const cur = selectionByListing.get(String(id));
+        if (!cur || `${cur.start}|${cur.end}|${currentGuests()}` !== key) return;
+        quoteByListing.set(String(id), { key, result });
+        renderModalQuote(id);
+    }
+
+    function renderModalQuote(id) {
+        const box = $("mvHostawayQuote");
+        if (!box) return;
+        if (String(window.mvSelectedApartmentId) !== String(id)) return;
+        box.innerHTML = "";
+        const sel = selectionByListing.get(String(id));
+        const entry = quoteByListing.get(String(id));
+        if (!sel || !sel.start || !sel.end || !entry) return;
+        if (entry.key !== `${sel.start}|${sel.end}|${currentGuests()}`) return; // stale for the current selection
+        const r = entry.result;
+        const line = (txt, cls) => { const el = document.createElement("div"); el.textContent = txt; if (cls) el.className = cls; box.appendChild(el); return el; };
+        if (r.state === "loading") { line("Checking price…"); return; }
+        if (r.state === "quoted") {
+            line(`${fmtMoney(r.total, r.currency)} total · ${fmtMoney(r.nightlyAverage, r.currency)}/night · ${r.nights} night${r.nights === 1 ? "" : "s"} · ${currentGuests()} guest${currentGuests() === 1 ? "" : "s"}`, "mv-quote__total");
+            r.breakdown.forEach((b) => line(`${b.label}: ${fmtMoney(b.total, r.currency)}`, "mv-quote__line"));
+            line(`Checked ${r.checkedAt ? new Date(r.checkedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "just now"}. ${r.note || "Quote only — no inventory is held."}`, "mv-quote__note");
+            return;
+        }
+        if (r.state === "unavailable") {
+            line("Not available for these dates and guests:", "mv-hcal__warn");
+            r.reasons.forEach((x) => line(`• ${x.message || x.code}`, "mv-hcal__warn"));
+            return;
+        }
+        const u = line("Price and availability could not be confirmed. ", "mv-hcal__warn");
+        const retry = document.createElement("button");
+        retry.type = "button"; retry.className = "mv-btn mv-btn--ghost"; retry.textContent = "Retry";
+        retry.addEventListener("click", () => requestModalQuote(id));
+        u.appendChild(retry);
+    }
+
+    /** Search bar: one quote per visible Hostaway card for the search dates/guests. */
+    async function quoteHostawayCards(cards, checkIn, checkOut, guests, seq) {
+        const results = new Map(); // id -> parsed result
+        for (const card of cards) {
+            if (seq !== searchSeq) return null; // superseded: stop, caller leaves the UI cleared
+            const id = Number(card.dataset.apartmentId);
+            const result = await fetchQuote({ id, from: checkIn, to: checkOut, guests });
+            if (seq !== searchSeq) return null;
+            results.set(id, result);
+            const subtitle = card.querySelector(".mv-card__meta span:last-child");
+            card.classList.remove("is-unconfirmed");
+            if (result.state === "quoted") {
+                card.style.display = "";
+                if (subtitle) subtitle.textContent = `from ${fmtMoney(result.nightlyAverage, result.currency)}/night · ${fmtMoney(result.total, result.currency)} total`;
+            } else if (result.state === "unavailable") {
+                card.style.display = "none";
+            } else {
+                card.style.display = "";
+                card.classList.add("is-unconfirmed");
+                if (subtitle) subtitle.textContent = "Availability unknown — try again";
+            }
+        }
+        return results;
+    }
+
+    function renderHostawaySearchSummary(results, cards) {
+        const quoted = [...results.values()].filter((r) => r.state === "quoted");
+        const unavailable = [...results.entries()].filter(([, r]) => r.state === "unavailable");
+        const unconfirmed = [...results.values()].filter((r) => r.state === "unconfirmed");
+        // Visible results message: rejection reasons (hidden cards cannot show them) + unknown notice.
+        const parts = [];
+        unavailable.forEach(([id, r]) => {
+            const p = PROPERTIES.find((x) => Number(x.id) === Number(id));
+            parts.push(`${p ? p.name : id}: ${r.reasons.map((x) => x.message || x.code).join(" ")}`);
+        });
+        if (unconfirmed.length) parts.push(`${unconfirmed.length} propert${unconfirmed.length === 1 ? "y" : "ies"} could not be checked — try again.`);
+        $msg.textContent = parts.join(" · ");
+        // Footer: minimum nightly per currency, never across currencies.
+        if (quoted.length) {
+            const byCurrency = new Map();
+            quoted.forEach((r) => byCurrency.set(r.currency, Math.min(byCurrency.get(r.currency) ?? Infinity, r.nightlyAverage)));
+            const from = [...byCurrency.entries()].map(([c, v]) => `from ${fmtMoney(v, c)}/night`).join(" · ");
+            $availabilityStatus.textContent = `Available · ${from}${unconfirmed.length ? " · some properties could not be checked" : ""}`;
+        } else if (unconfirmed.length) {
+            $availabilityStatus.textContent = "Availability could not be confirmed for these dates — try again";
+        } else if (results.size === cards.length && cards.length) {
+            $availabilityStatus.textContent = "No availability for these dates";
+        } else {
+            $availabilityStatus.textContent = "";
+        }
+        $availabilityPrice.textContent = "";
     }
 
     const $ = (id) => document.getElementById(id);
@@ -1333,7 +1528,7 @@
                 ? `<img src="${esc(p.img)}" alt="${esc(p.name)}" loading="eager"
                          onerror="this.onerror=null;this.style.opacity=0.7;this.style.filter='grayscale(1)';">`
                 : `<div class="mv-card__noimg" role="img" aria-label="No photo available"></div>`;
-            const subtitle = p.source === "hostaway" ? UI_TEXT.notConnected : "Select dates to see price &amp; availability";
+            const subtitle = "Select dates to see price &amp; availability";
             return `
             <div class="mv-card" data-id="${p.id}" data-property-id="${esc(pid)}" data-apartment-id="${p.id}" data-source="${esc(p.source || "")}">
                 <div class="mv-heart${saved ? " is-saved" : ""}" data-heart="1" data-id="${p.id}" data-property-id="${esc(pid)}" data-on="${saved ? 1 : 0}">
@@ -1420,7 +1615,7 @@
                              onerror="this.onerror=null;this.style.opacity=0.7;this.style.filter='grayscale(1)';">`
             : `<div class="mv-modal__img mv-card__noimg" role="img" aria-label="No photo available"></div>`;
         const modalNote = isHostaway
-            ? `${UI_TEXT.notConnected}. Dates and pricing will be confirmed live in the next update.`
+            ? "Pick a check-in night and a check-out day on the calendar, then check the price. Prices come from the property management system in its own currency."
             : "Prototype: next step is live availability + pricing via Smoobu API (backend).";
         const modalActions = isHostaway ? "" : `
                     <div class="mv-actions">
@@ -1441,6 +1636,7 @@
                         </div>
                         <div class="mv-calendar__months mv-hcal__months" id="mvHostawayCalendarMonths"></div>
                         <div class="mv-hcal__selection" id="mvHostawaySelection"></div>
+                        <div class="mv-quote" id="mvHostawayQuote" aria-live="polite"></div>
                     </div>` : "";
 
         $modalContent.innerHTML = `
@@ -1791,6 +1987,11 @@
     function runSearch() {
         const guests = parseInt($("mvGuests").value, 10);
         currentList = PROPERTIES.filter(p => p.sleeps >= guests);
+        // Any date/guest change invalidates in-flight quotes and clears shown prices
+        // (renderWithFilters re-renders cards with the neutral subtitle).
+        invalidateQuotes();
+        $availabilityStatus.textContent = "";
+        $availabilityPrice.textContent = "";
         renderWithFilters();
     }
 
@@ -1800,6 +2001,7 @@
         $searchBtn.disabled = true;
         $searchBtn.textContent = "Checking...";
         runSearch();
+        const seq = searchSeq; // this search's token; a newer search/change bumps searchSeq
 
         const checkIn = $("mvCheckin").value;
         const checkOut = $("mvCheckout").value;
@@ -1807,15 +2009,24 @@
         const availabilityById = window.mvAvailabilityById || {};
         window.mvAvailabilityById = availabilityById;
         const allCards = Array.from($results.querySelectorAll(".mv-card"));
-        // U1: Hostaway cards are not routed through the legacy Smoobu availability
-        // call (different contract). They stay visible, unpriced, with the
-        // informational subtitle. Live availability/pricing arrives in U2–U4.
+        // U4: Hostaway cards get one server-validated quote each (sequential).
         const hostawayCards = allCards.filter((card) => card.dataset.source === "hostaway");
-        hostawayCards.forEach((card) => {
-            card.style.display = "";
-            const subtitle = card.querySelector(".mv-card__meta span:last-child");
-            if (subtitle) subtitle.textContent = UI_TEXT.notConnected;
-        });
+        let hostawayResults = null;
+        if (hostawayCards.length) {
+            if (!checkIn || !checkOut) {
+                $availabilityStatus.textContent = "Select check-in and check-out dates.";
+            } else {
+                hostawayCards.forEach((card) => { card.style.display = ""; card.classList.remove("is-unconfirmed"); const s = card.querySelector(".mv-card__meta span:last-child"); if (s) s.textContent = "Checking…"; });
+                $availabilityStatus.textContent = "Checking availability…";
+                hostawayResults = await quoteHostawayCards(hostawayCards, checkIn, checkOut, currentGuests(), seq);
+                if (hostawayResults === null) { // superseded by a newer search/change: leave the (already cleared) UI alone
+                    $searchBtn.disabled = false;
+                    $searchBtn.textContent = originalLabel;
+                    return;
+                }
+                renderHostawaySearchSummary(hostawayResults, hostawayCards);
+            }
+        }
         const cards = allCards.filter((card) => card.dataset.source !== "hostaway");
 
         for (const card of cards) {
@@ -1896,9 +2107,7 @@
         // UI summary uses min nightlyPrice from current rendered available units; pricing logic unchanged.
         const availableCards = cards.filter((card) => card.style.display !== "none");
         if (!cards.length && hostawayCards.length) {
-            // Only Hostaway cards on the page: say so plainly — no availability or price claim.
-            $availabilityStatus.textContent = `${UI_TEXT.notConnected} for these properties.`;
-            $availabilityPrice.textContent = "";
+            // Only Hostaway cards on the page: the summary was already written by renderHostawaySearchSummary (U4).
         } else if (!availableCards.length) {
             $availabilityStatus.textContent = "No availability for these dates";
             $availabilityPrice.textContent = "";
