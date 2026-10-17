@@ -555,6 +555,27 @@
     .mv-cal__day.is-inrange{
         background: #fff5f7;
     }
+    /* U2: read-only Hostaway calendar inside the property modal */
+    .mv-hcal{ margin-top: 12px; }
+    .mv-hcal__status{ font-size: 13px; opacity: .85; margin-bottom: 6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .mv-hcal__status .mv-btn{ padding: 4px 10px; font-size: 12px; }
+    .mv-hcal__legend{ display:flex; gap: 12px; flex-wrap:wrap; font-size: 12px; opacity: .8; margin-bottom: 8px; }
+    .mv-hcal__legend span{ display:inline-flex; align-items:center; gap:6px; }
+    .mv-hcal__swatch{ display:inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid #e0e0e0; background:#fff; }
+    .mv-hcal__months{ grid-template-columns: 1fr; gap: 10px; }
+    .mv-hcal .mv-cal__day--static{ cursor: default; }
+    .mv-cal__day.is-blocked, .mv-hcal__swatch.is-blocked{
+        background: #fde8ec;
+        color: #b91c1c;
+        border: 1px solid #f6c5cf;
+        text-decoration: line-through;
+    }
+    .mv-cal__day.is-unknown, .mv-hcal__swatch.is-unknown{
+        background: repeating-linear-gradient(45deg, #fafafa, #fafafa 4px, #ececec 4px, #ececec 8px);
+        color: #8a8a8a;
+        border: 1px solid #e6e6e6;
+    }
+    .mv-modal{ overflow: auto; } /* tall modal content (calendar) scrolls instead of being clipped */
     @media(max-width: 760px){
         .mv-calendar__months{ grid-template-columns: 1fr; }
         .mv-calendar__panel{ margin: 6vh 12px; }
@@ -662,6 +683,11 @@
         loadFailed: "Properties could not be loaded right now.",
         loading: "Loading properties…"
     };
+    UI_TEXT.calLoading = "Loading live calendar…";
+    UI_TEXT.calOk = "Live calendar";
+    UI_TEXT.calIncomplete = "Some dates could not be confirmed";
+    UI_TEXT.calError = "Availability could not be confirmed";
+    UI_TEXT.calBeyond = "Dates beyond the shown window are not confirmed";
     const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const httpsUrl = (v) => (typeof v === "string" && /^https:\/\/[^\s"'<>]+$/i.test(v) ? v : null);
     const posInt = (v) => (Number.isInteger(v) && v > 0 ? v : null);
@@ -684,6 +710,157 @@
             currency: typeof l.currency === "string" ? l.currency : null,
             url: httpsUrl(l.url)
         };
+    }
+
+    // ---- Hostaway calendar (Stage F4 / U2): per-listing, display-only ----
+    // Source: GET /api/booking/calendar?id=<listing> (default window today..+90).
+    // `unavailable[]` ranges are arrival-inclusive / departure-exclusive: the
+    // night of `arrival` up to but NOT including `departure` is blocked.
+    // State is kept per listing id and replaced on every modal open; a late
+    // response for a previously opened listing is discarded.
+    // Fail closed: any malformed response, HTTP failure or incomplete coverage
+    // renders nights as "not confirmed" (never as available).
+    // Night selection / arrival-departure validation is deliberately NOT part
+    // of U2 (scheduled for U3): the calendar is read-only here.
+    const CAL_MONTHS = 2;
+    const calendarByListing = new Map(); // id -> parsed state
+    let calendarRequestSeq = 0;
+
+    const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
+    const isIsoDate = (v) => typeof v === "string" && isoDateRe.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+    const addDaysISO = (iso, n) => {
+        const [y, m, d] = iso.split("-").map(Number);
+        return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+    };
+
+    /** Strictly parse the public calendar payload for one listing. Never throws. */
+    function parseCalendarResponse(json, expectedId) {
+        const fail = (reason) => ({ status: "error", reason, nights: new Set(), ranges: [], from: null, to: null, checkedAt: null });
+        if (!json || typeof json !== "object") return fail("NOT_AN_OBJECT");
+        if (json.ok !== true) return fail("NOT_OK");
+        if (Number(json.listingId) !== Number(expectedId)) return fail("LISTING_MISMATCH");
+        if (!isIsoDate(json.from) || !isIsoDate(json.to) || json.to < json.from) return fail("BAD_WINDOW");
+        if (!Array.isArray(json.unavailable)) return fail("BAD_UNAVAILABLE");
+        if (!json.coverage || typeof json.coverage !== "object" || typeof json.coverage.complete !== "boolean") return fail("BAD_COVERAGE");
+        const nights = new Set();
+        const ranges = [];
+        for (const r of json.unavailable) {
+            if (!r || typeof r !== "object" || !isIsoDate(r.arrival) || !isIsoDate(r.departure) || !(r.arrival < r.departure)) return fail("BAD_RANGE");
+            if (nightsSpan(r.arrival, r.departure) > 400) return fail("BAD_RANGE");
+            for (let d = r.arrival; d < r.departure; d = addDaysISO(d, 1)) nights.add(d); // departure-exclusive
+            ranges.push({ arrival: r.arrival, departure: r.departure });
+        }
+        return {
+            status: json.coverage.complete ? "ok" : "incomplete",
+            reason: null,
+            nights,
+            ranges,
+            from: json.from,
+            to: json.to,
+            checkedAt: typeof json.checkedAt === "string" ? json.checkedAt : null
+        };
+    }
+    function nightsSpan(a, b) {
+        return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+    }
+
+    /** Classification of one calendar day for display: past | unavailable | available | unknown. */
+    function nightState(iso, state, todayIso) {
+        if (iso < todayIso) return "past";
+        if (!state || state.status === "error") return "unknown";
+        if (iso < state.from || iso > state.to) return "unknown"; // outside the fetched window
+        if (state.nights.has(iso)) return "unavailable";
+        if (state.status === "incomplete") return "unknown";     // coverage gaps: never assume available
+        return "available";
+    }
+
+    async function loadHostawayCalendar(id) {
+        const seq = ++calendarRequestSeq;
+        calendarByListing.delete(id); // replace stale state for this listing
+        renderHostawayCalendar(id, { loading: true });
+        if (!API_BASE) {
+            calendarByListing.set(id, { status: "error", reason: "NO_BACKEND", nights: new Set(), ranges: [], from: null, to: null, checkedAt: null });
+            renderHostawayCalendar(id);
+            return;
+        }
+        let state;
+        try {
+            const response = await fetch(`${API_BASE}/api/booking/calendar?id=${encodeURIComponent(id)}`, { method: "GET", cache: "no-store" });
+            const json = response.ok ? await response.json() : null;
+            state = response.ok ? parseCalendarResponse(json, id) : { status: "error", reason: `HTTP_${response.status}`, nights: new Set(), ranges: [], from: null, to: null, checkedAt: null };
+        } catch (err) {
+            state = { status: "error", reason: "FETCH_FAILED", nights: new Set(), ranges: [], from: null, to: null, checkedAt: null };
+            console.error("Failed to load calendar:", err);
+        }
+        // Discard if the user has moved on to another listing or a newer request.
+        if (seq !== calendarRequestSeq || String(window.mvSelectedApartmentId) !== String(id)) return;
+        calendarByListing.set(id, state);
+        renderHostawayCalendar(id);
+    }
+
+    function renderHostawayCalendar(id, { loading = false } = {}) {
+        const status = $("mvHostawayCalendarStatus");
+        const months = $("mvHostawayCalendarMonths");
+        const legend = $("mvHostawayCalendarLegend");
+        if (!status || !months) return;
+        if (String(window.mvSelectedApartmentId) !== String(id)) return;
+        const state = loading ? null : calendarByListing.get(id) || null;
+        const todayIso = toISODate(new Date());
+
+        status.innerHTML = "";
+        if (loading) {
+            status.textContent = UI_TEXT.calLoading;
+        } else if (!state || state.status === "error") {
+            status.textContent = `${UI_TEXT.calError}. `;
+            const retry = document.createElement("button");
+            retry.type = "button";
+            retry.className = "mv-btn mv-btn--ghost";
+            retry.textContent = "Retry";
+            retry.addEventListener("click", () => loadHostawayCalendar(id));
+            status.appendChild(retry);
+        } else if (state.status === "incomplete") {
+            status.textContent = `${UI_TEXT.calIncomplete} · ${UI_TEXT.calBeyond}.`;
+        } else {
+            status.textContent = `${UI_TEXT.calOk} · checked ${state.checkedAt ? new Date(state.checkedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "just now"} · ${UI_TEXT.calBeyond}.`;
+        }
+        if (legend) legend.style.display = loading ? "none" : "";
+
+        months.innerHTML = "";
+        if (loading) return;
+        const base = new Date();
+        base.setDate(1);
+        for (let offset = 0; offset < CAL_MONTHS; offset += 1) {
+            const monthDate = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+            const monthTitle = monthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+            const firstDay = monthDate.getDay();
+            const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+            const monthEl = document.createElement("div");
+            monthEl.className = "mv-cal__month";
+            monthEl.innerHTML = `
+                <div class="mv-cal__title">${esc(monthTitle)}</div>
+                <div class="mv-cal__weekdays">
+                    <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+                </div>
+                <div class="mv-cal__grid"></div>
+            `;
+            const grid = monthEl.querySelector(".mv-cal__grid");
+            for (let i = 0; i < firstDay; i += 1) grid.appendChild(document.createElement("div"));
+            for (let day = 1; day <= daysInMonth; day += 1) {
+                const iso = toISODate(new Date(monthDate.getFullYear(), monthDate.getMonth(), day));
+                const s = nightState(iso, state, todayIso);
+                const cell = document.createElement("div");
+                cell.className = "mv-cal__day mv-cal__day--static";
+                cell.textContent = String(day);
+                cell.dataset.date = iso;
+                cell.dataset.state = s;
+                if (s === "past") cell.classList.add("is-disabled");
+                if (s === "unavailable") cell.classList.add("is-blocked");
+                if (s === "unknown") cell.classList.add("is-unknown");
+                cell.setAttribute("aria-label", `${iso}: ${s === "unavailable" ? "unavailable" : s === "available" ? "available" : s === "past" ? "past" : "not confirmed"}`);
+                grid.appendChild(cell);
+            }
+            months.appendChild(monthEl);
+        }
     }
 
     const $ = (id) => document.getElementById(id);
@@ -1127,6 +1304,17 @@
                         <!-- Removed redundant Done button — modal closes via X or Reserve only. -->
                     </div>`;
         const modalLink = p.url ? `<a class="mv-link" href="${esc(p.url)}" target="_blank" rel="noopener">Open full property page →</a>` : "";
+        // U2: read-only live calendar for Hostaway listings (per-listing state, departure-exclusive).
+        const modalCalendar = isHostaway ? `
+                    <div class="mv-hcal" id="mvHostawayCalendar" aria-live="polite">
+                        <div class="mv-hcal__status" id="mvHostawayCalendarStatus"></div>
+                        <div class="mv-hcal__legend" id="mvHostawayCalendarLegend">
+                            <span><i class="mv-hcal__swatch"></i>Available night</span>
+                            <span><i class="mv-hcal__swatch is-blocked"></i>Unavailable night</span>
+                            <span><i class="mv-hcal__swatch is-unknown"></i>Not confirmed</span>
+                        </div>
+                        <div class="mv-calendar__months mv-hcal__months" id="mvHostawayCalendarMonths"></div>
+                    </div>` : "";
 
         $modalContent.innerHTML = `
             <div class="mv-modal__content">
@@ -1147,6 +1335,7 @@
                     <div style="margin-top:10px; font-size:13px; opacity:.8;">
                         ${modalNote}
                     </div>
+                    ${modalCalendar}
                     ${modalActions}
                     ${modalLink}
                 </div>
@@ -1154,7 +1343,10 @@
         `;
 
         $modal.setAttribute("aria-hidden", "false");
-        if (isHostaway) return; // no legacy Smoobu reservation fetches, no booking widget (U2–U4)
+        if (isHostaway) {
+            loadHostawayCalendar(p.id); // read-only calendar; no booking widget, no Smoobu fetches (U3–U4 follow)
+            return;
+        }
 
         $("mvReserveBtn").addEventListener("click", (event) => {
             event.preventDefault();
