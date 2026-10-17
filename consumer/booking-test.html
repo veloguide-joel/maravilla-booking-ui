@@ -563,7 +563,12 @@
     .mv-hcal__legend span{ display:inline-flex; align-items:center; gap:6px; }
     .mv-hcal__swatch{ display:inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid #e0e0e0; background:#fff; }
     .mv-hcal__months{ grid-template-columns: 1fr; gap: 10px; }
-    .mv-hcal .mv-cal__day--static{ cursor: default; }
+    .mv-hcal button.mv-cal__day--hostaway{ cursor: pointer; font: inherit; }
+    .mv-hcal button.mv-cal__day--hostaway.is-blocked,
+    .mv-hcal button.mv-cal__day--hostaway.is-unknown{ cursor: pointer; } /* selectable as check-out; validation decides */
+    .mv-hcal__selection{ margin-top: 10px; font-size: 13px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .mv-hcal__selection .mv-btn{ padding: 4px 10px; font-size: 12px; }
+    .mv-hcal__warn{ color: #b91c1c; }
     .mv-cal__day.is-blocked, .mv-hcal__swatch.is-blocked{
         background: #fde8ec;
         color: #b91c1c;
@@ -774,6 +779,42 @@
         return "available";
     }
 
+    // ---- Night-based stay selection (Stage F4 / U3) ----
+    // A stay from `start` to `end` occupies the nights start .. end-1 (departure
+    // exclusive). Every occupied night must be an "available" night; the
+    // departure day itself is not occupied, so checking out on the first night
+    // of a block is fine from an occupancy standpoint. Anything else about the
+    // stay (min/max stay, closed-on-arrival/departure, capacity, lead time,
+    // price) is decided by the backend's validated quote (U4) — this check never
+    // declares a stay bookable, only "occupied nights clear" or a rejection.
+    const selectionByListing = new Map(); // id -> { start, end }
+    function evaluateStaySelection(start, end, state, todayIso) {
+        if (!isIsoDate(start)) return { ok: false, reason: "NO_START" };
+        if (start < todayIso) return { ok: false, reason: "PAST_START", night: start };
+        if (!isIsoDate(end)) return { ok: false, reason: "NO_END" };
+        if (!(end > start)) return { ok: false, reason: "END_NOT_AFTER_START" };
+        const nights = [];
+        for (let d = start; d < end; d = addDaysISO(d, 1)) {
+            const s = nightState(d, state, todayIso);
+            if (s === "unavailable") return { ok: false, reason: "NIGHT_UNAVAILABLE", night: d, nights };
+            if (s !== "available") return { ok: false, reason: "NIGHT_UNCONFIRMED", night: d, nights };
+            nights.push(d);
+            if (nights.length > 90) return { ok: false, reason: "TOO_LONG", nights };
+        }
+        return { ok: true, nights, count: nights.length };
+    }
+    const SELECTION_TEXT = {
+        PAST_START: "Check-in must be a future date.",
+        NIGHT_UNAVAILABLE: "That stay includes an unavailable night",
+        NIGHT_UNCONFIRMED: "That stay includes a night that could not be confirmed",
+        TOO_LONG: "Stays longer than 90 nights cannot be requested online.",
+        END_NOT_AFTER_START: "Check-out must be after check-in."
+    };
+    function fmtShort(iso) {
+        const [y, m, d] = iso.split("-").map(Number);
+        return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(y, m - 1, d));
+    }
+
     async function loadHostawayCalendar(id) {
         const seq = ++calendarRequestSeq;
         calendarByListing.delete(id); // replace stale state for this listing
@@ -848,8 +889,12 @@
             for (let day = 1; day <= daysInMonth; day += 1) {
                 const iso = toISODate(new Date(monthDate.getFullYear(), monthDate.getMonth(), day));
                 const s = nightState(iso, state, todayIso);
-                const cell = document.createElement("div");
-                cell.className = "mv-cal__day mv-cal__day--static";
+                // U3: future days are buttons (selectable as check-in only when the
+                // night is available; any future day may be chosen as check-out —
+                // the occupancy check covers the nights before it). Past days stay inert.
+                const cell = document.createElement(s === "past" ? "div" : "button");
+                if (s !== "past") cell.type = "button";
+                cell.className = "mv-cal__day mv-cal__day--hostaway";
                 cell.textContent = String(day);
                 cell.dataset.date = iso;
                 cell.dataset.state = s;
@@ -860,6 +905,87 @@
                 grid.appendChild(cell);
             }
             months.appendChild(monthEl);
+        }
+        if (!months.dataset.bound) {
+            months.dataset.bound = "1";
+            months.addEventListener("click", (event) => {
+                const cell = event.target.closest(".mv-cal__day--hostaway");
+                if (!cell || cell.dataset.state === "past") return;
+                handleHostawayDayClick(String(window.mvSelectedApartmentId), cell.dataset.date, cell.dataset.state);
+            });
+        }
+        applyHostawaySelection(id);
+    }
+
+    /** Two-click selection: check-in (must be an available night), then check-out (any later day). */
+    function handleHostawayDayClick(id, iso, dayState) {
+        const sel = selectionByListing.get(id) || { start: null, end: null };
+        const todayIso = toISODate(new Date());
+        const state = calendarByListing.get(id) || null;
+        let next;
+        if (!sel.start || (sel.start && sel.end) || iso <= sel.start) {
+            // (re)start a selection: the check-in night itself must be available
+            if (dayState !== "available") {
+                selectionByListing.set(id, { start: null, end: null, message: dayState === "unavailable" ? `${fmtShort(iso)} is not available for check-in.` : `${fmtShort(iso)} could not be confirmed — choose another check-in date.` });
+                applyHostawaySelection(id);
+                return;
+            }
+            next = { start: iso, end: null };
+        } else {
+            next = { start: sel.start, end: iso };
+            const verdict = evaluateStaySelection(next.start, next.end, state, todayIso);
+            if (!verdict.ok) {
+                const msg = verdict.night && (verdict.reason === "NIGHT_UNAVAILABLE" || verdict.reason === "NIGHT_UNCONFIRMED")
+                    ? `${SELECTION_TEXT[verdict.reason]} (${fmtShort(verdict.night)}). Choose different dates.`
+                    : SELECTION_TEXT[verdict.reason] || "Those dates cannot be selected.";
+                next = { start: null, end: null, message: msg };
+            }
+        }
+        selectionByListing.set(id, next);
+        applyHostawaySelection(id);
+    }
+
+    /** Paint the current selection for `id` and refresh the summary line. Re-validates against fresh calendar data. */
+    function applyHostawaySelection(id) {
+        const months = $("mvHostawayCalendarMonths");
+        const summary = $("mvHostawaySelection");
+        if (!months || !summary) return;
+        if (String(window.mvSelectedApartmentId) !== String(id)) return;
+        const state = calendarByListing.get(id) || null;
+        const todayIso = toISODate(new Date());
+        let sel = selectionByListing.get(id) || { start: null, end: null };
+        // A completed selection must still pass against the latest calendar (e.g. after Retry/reload).
+        if (sel.start && sel.end) {
+            const v = evaluateStaySelection(sel.start, sel.end, state, todayIso);
+            if (!v.ok) { sel = { start: null, end: null, message: `${SELECTION_TEXT[v.reason] || "Selected dates are no longer valid"}${v.night ? ` (${fmtShort(v.night)})` : ""}. Please choose again.` }; selectionByListing.set(id, sel); }
+        }
+        months.querySelectorAll(".mv-cal__day--hostaway").forEach((cell) => {
+            const d = cell.dataset.date;
+            cell.classList.toggle("is-start", !!sel.start && d === sel.start);
+            cell.classList.toggle("is-end", !!sel.end && d === sel.end);
+            cell.classList.toggle("is-inrange", !!(sel.start && sel.end) && d > sel.start && d < sel.end);
+        });
+        summary.innerHTML = "";
+        const text = document.createElement("span");
+        if (sel.start && sel.end) {
+            const n = nightsSpan(sel.start, sel.end);
+            text.textContent = `${fmtShort(sel.start)} → ${fmtShort(sel.end)} · ${n} night${n === 1 ? "" : "s"} · occupied nights clear. Final eligibility (stay rules, capacity) and price are confirmed in the next step.`;
+        } else if (sel.start) {
+            text.textContent = `Check-in ${fmtShort(sel.start)} — now choose a check-out date.`;
+        } else if (sel.message) {
+            text.textContent = sel.message;
+            text.className = "mv-hcal__warn";
+        } else {
+            text.textContent = "Select a check-in night, then a check-out day.";
+        }
+        summary.appendChild(text);
+        if (sel.start || sel.end) {
+            const clear = document.createElement("button");
+            clear.type = "button";
+            clear.className = "mv-btn mv-btn--ghost";
+            clear.textContent = "Clear";
+            clear.addEventListener("click", () => { selectionByListing.set(id, { start: null, end: null }); applyHostawaySelection(id); });
+            summary.appendChild(clear);
         }
     }
 
@@ -1314,6 +1440,7 @@
                             <span><i class="mv-hcal__swatch is-unknown"></i>Not confirmed</span>
                         </div>
                         <div class="mv-calendar__months mv-hcal__months" id="mvHostawayCalendarMonths"></div>
+                        <div class="mv-hcal__selection" id="mvHostawaySelection"></div>
                     </div>` : "";
 
         $modalContent.innerHTML = `
