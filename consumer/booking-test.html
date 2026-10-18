@@ -620,21 +620,24 @@
     // keeps the production proxy exactly as before. No credentials live here:
     // the /api/booking/* routes are public and read-only by design.
     const PRODUCTION_API = "https://maravilla-smoobu-proxy.vercel.app";
-    const HOSTAWAY_FEATURE_API = "https://maravilla-smoobu-proxy-git-featu-f78e50-joel-goralskis-projects.vercel.app";
+    // Development/preview backend = the proxy's DEV branch alias (Hostaway Stages
+    // A–F3 merged to proxy DEV on 2026-10-18). Step B1 replaced the former
+    // proxy feature-branch alias here; production hosts are untouched.
+    const DEV_API = "https://maravilla-smoobu-proxy-git-dev-joel-goralskis-projects.vercel.app";
     const API_ENVIRONMENTS = Object.freeze({
         "maravilla-booking-ui.vercel.app": PRODUCTION_API,
         "www.maravillanayarit.com": PRODUCTION_API,
         "maravillanayarit.com": PRODUCTION_API,
-        "maravilla-booking-ui-git-dev-joel-goralskis-projects.vercel.app": HOSTAWAY_FEATURE_API,
-        "localhost": HOSTAWAY_FEATURE_API,
-        "127.0.0.1": HOSTAWAY_FEATURE_API
+        "maravilla-booking-ui-git-dev-joel-goralskis-projects.vercel.app": DEV_API,
+        "localhost": DEV_API,
+        "127.0.0.1": DEV_API
     });
     // Git-branch preview aliases of THIS Vercel project (e.g. feature/hostaway-ui)
-    // are a recognised class: they always target the Hostaway feature proxy.
+    // are a recognised class: they always target the proxy DEV backend.
     const PROJECT_PREVIEW_HOST = /^maravilla-booking-ui-git-[a-z0-9-]+-joel-goralskis-projects\.vercel\.app$/;
     function resolveApiBase(hostname) {
         if (Object.prototype.hasOwnProperty.call(API_ENVIRONMENTS, hostname)) return API_ENVIRONMENTS[hostname];
-        if (PROJECT_PREVIEW_HOST.test(hostname)) return HOSTAWAY_FEATURE_API;
+        if (PROJECT_PREVIEW_HOST.test(hostname)) return DEV_API;
         return null; // unknown host: fail safe
     }
     const API_BASE = resolveApiBase(window.location.hostname);
