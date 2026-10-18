@@ -47,6 +47,7 @@
     </div>
 <div id="availabilityStatus" style="margin-top:8px;font-weight:bold;"></div>
 <div id="availabilityPrice" style="margin-top:4px;"></div>
+<div id="mvCurrencyNote" style="margin-top:6px;font-size:12px;opacity:.75;">Prices are currently displayed in Mexican pesos (MXN).</div>
 
     <div class="mv-subrow">
         <div id="mvMsg" class="mv-msg"></div>
@@ -690,7 +691,6 @@
     // the authoritative source; the former hard-coded Smoobu list is gone).
     let PROPERTIES = [];
     const UI_TEXT = {
-        notConnected: "Live availability & pricing not yet connected", // legacy label (U1); Hostaway paths are connected as of U4
         noBackend: "This deployment is not configured for live property data.",
         loadFailed: "Properties could not be loaded right now.",
         loading: "Loading properties…"
@@ -1147,6 +1147,7 @@
                 if (subtitle) subtitle.textContent = `from ${fmtMoney(result.nightlyAverage, result.currency)}/night · ${fmtMoney(result.total, result.currency)} total`;
             } else if (result.state === "unavailable") {
                 card.style.display = "none";
+                if (subtitle) subtitle.textContent = "Not available for these dates"; // never leave the transient "Checking…" behind (U5a)
             } else {
                 card.style.display = "";
                 card.classList.add("is-unconfirmed");
@@ -1605,9 +1606,9 @@
         const checkin = $("mvCheckin").value;
         const checkout = $("mvCheckout").value;
         const guests = $("mvGuests").value;
-        // U1: Hostaway listings get an informational modal only. The legacy
-        // Smoobu calendar/availability logic below has a different contract
-        // and is converted in U2–U4; until then no availability or price is shown.
+        // Hostaway listings (the only inventory source since U1) get the live
+        // calendar, night selection and server-validated quote (U2–U4). The
+        // non-Hostaway branch below is legacy and unreachable; its removal is U5b.
         const isHostaway = p.source === "hostaway";
 
         const modalImage = p.img
@@ -1615,8 +1616,8 @@
                              onerror="this.onerror=null;this.style.opacity=0.7;this.style.filter='grayscale(1)';">`
             : `<div class="mv-modal__img mv-card__noimg" role="img" aria-label="No photo available"></div>`;
         const modalNote = isHostaway
-            ? "Pick a check-in night and a check-out day on the calendar, then check the price. Prices come from the property management system in its own currency."
-            : "Prototype: next step is live availability + pricing via Smoobu API (backend).";
+            ? "Pick a check-in night and a check-out day on the calendar, then check the price. Prices come from the property management system and are currently displayed in Mexican pesos (MXN)."
+            : "Live availability and pricing are not connected for this property.";
         const modalActions = isHostaway ? "" : `
                     <div class="mv-actions">
                         <div id="mvModalBooking"></div>
@@ -1667,7 +1668,14 @@
 
         $modal.setAttribute("aria-hidden", "false");
         if (isHostaway) {
-            loadHostawayCalendar(p.id); // read-only calendar; no booking widget, no Smoobu fetches (U3–U4 follow)
+            // U5a: a stale refusal message or a previous quote result must not be the
+            // first thing shown on (re)open. A still-valid date selection is kept and
+            // re-validated against the fresh calendar by applyHostawaySelection().
+            const key = String(p.id);
+            const prevSel = selectionByListing.get(key);
+            if (prevSel && prevSel.message) selectionByListing.set(key, { start: prevSel.start || null, end: prevSel.end || null });
+            quoteByListing.delete(key);
+            loadHostawayCalendar(p.id); // live calendar + selection + quote; no reserve/checkout action exists
             return;
         }
 
@@ -1686,7 +1694,6 @@
             fetch(`${API_BASE}/api/smoobu/reservations?apartmentId=${encodeURIComponent(apartmentId)}`)
                 .then(resp => resp.json())
                 .then(data => {
-                    console.log('[RESERVATIONS RESPONSE]', data); // TEMP log for shape verification
                     // TODO: If response shape unclear, verify exact field names
                     // Example expected: data.reservations (array of { arrival, departure })
                     if (Array.isArray(data.reservations)) {
@@ -1950,11 +1957,6 @@
                 departure
             });
             const url = `${API_BASE}/api/smoobu/availability?${params.toString()}`;
-            console.log("[availability request]", {
-                url,
-                params: Object.fromEntries(params.entries())
-            });
-            console.log('[AVAILABILITY URL]', url);
             const response = await fetch(url);
             if (!response.ok) {
                 const errText = await response.text();
@@ -2043,7 +2045,6 @@
                     departure: checkOut
                 });
                 const url = `${API_BASE}/api/smoobu/availability?${params.toString()}`;
-                console.log('[AVAILABILITY URL]', url);
                 const resp = await fetch(url);
                 if (!resp.ok) {
                     const errText = await resp.text();
@@ -2054,7 +2055,6 @@
                 const available = data?.available ?? data?.isAvailable ?? data?.availability?.available;
                 const nightlyPrice = data?.nightlyPrice ?? data?.price ?? data?.availability?.price;
 
-                console.log("[availability result]", { apartmentId, available, nightlyPrice });
                 availabilityById[apartmentId] = { available, nightlyPrice };
 
                 if (available === true) {
