@@ -57,12 +57,6 @@
         </div>
     </div>
 
-    <div class="mv-apartments" aria-live="polite">
-        <div class="mv-apartments__title">Apartments</div>
-        <div id="mvApartmentsStatus" class="mv-apartments__status"></div>
-        <ul id="mvApartmentsList" class="mv-apartments__list"></ul>
-    </div>
-
     <div id="mvResults" class="mv-grid"></div>
 </div>
 
@@ -229,48 +223,6 @@
         grid-template-columns: repeat(3, 1fr);
         gap: 16px;
         margin-top: 14px;
-    }
-    .mv-apartments{
-        margin-top: 12px;
-        padding: 12px;
-        border: 1px solid #eee;
-        border-radius: 14px;
-        background: #fff;
-    }
-    .mv-apartments{
-        display: none;
-    }
-    .mv-apartments__title{
-        font-size: 13px;
-        font-weight: 700;
-        margin-bottom: 6px;
-    }
-    .mv-apartments__status{
-        font-size: 12px;
-        opacity: .75;
-        margin-bottom: 6px;
-    }
-    .mv-apartments__list{
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: 6px;
-        font-size: 13px;
-    }
-    .mv-apartments__list li{
-        padding: 6px 8px;
-        border: 1px solid #f0f0f0;
-        border-radius: 10px;
-        background: #fafafa;
-    }
-    .mv-apartments__group{
-        background: transparent;
-        border: 0;
-        padding: 6px 0 2px 0;
-        font-weight: 700;
-        opacity: .8;
-        pointer-events: none;
     }
     .mv-grid.mv-grouped{
         display: block;
@@ -1193,8 +1145,6 @@
     const $showAll = $("mvShowAll");
     const $modal = $("mvModal");
     const $modalContent = $("mvModalContent");
-    const $apartmentsStatus = $("mvApartmentsStatus");
-    const $apartmentsList = $("mvApartmentsList");
     const $datesBtn = $("mvDatesBtn");
     const $calendarModal = $("mvCalendarModal");
     const $calendarMonths = $("mvCalendarMonths");
@@ -1209,42 +1159,6 @@
     const getFavs = () => new Set(JSON.parse(localStorage.getItem(CONFIG.favoritesKey) || "[]").map(String));
     const setFavs = (set) => localStorage.setItem(CONFIG.favoritesKey, JSON.stringify([...set]));
     const fmtDate = (d) => d ? d : "—";
-
-    const getApartmentId = (apartment) => String(
-        apartment?.id ?? apartment?.apartmentId ?? apartment?.apartment_id ?? ""
-    );
-    const getParentPointer = (apartment) => {
-        const candidates = [
-            apartment?.parentId,
-            apartment?.parent_id,
-            apartment?.parentApartmentId,
-            apartment?.parent_apartment_id,
-            apartment?.parentPropertyId,
-            apartment?.parent_property_id,
-            apartment?.groupId,
-            apartment?.group_id,
-            apartment?.propertyGroupId,
-            apartment?.property_group_id
-        ];
-        const found = candidates.find((value) => value !== null && value !== undefined && value !== "");
-        return found == null ? "" : String(found);
-    };
-    const isParentApartment = (apartment) => Boolean(
-        apartment?.isParent ||
-        apartment?.is_parent ||
-        apartment?.isGroup ||
-        apartment?.is_group ||
-        apartment?.isParentProperty ||
-        apartment?.is_parent_property ||
-        (Array.isArray(apartment?.children) && apartment.children.length) ||
-        (Array.isArray(apartment?.units) && apartment.units.length)
-    );
-    const getParentKey = (apartment) => {
-        const parentPointer = getParentPointer(apartment);
-        if (parentPointer) return parentPointer;
-        if (isParentApartment(apartment)) return getApartmentId(apartment);
-        return "Ungrouped";
-    };
 
     const toSlug = (value) => String(value)
         .toLowerCase()
@@ -1382,22 +1296,15 @@
         const hasDates = Boolean($checkinInput.value && $checkoutInput.value);
         $searchBtn.disabled = !hasDates;
     };
-    const updateModalIfOpen = () => {
-        if ($modal.getAttribute("aria-hidden") === "false") {
-            renderModalBookingWidget();
-        }
-    };
     const clearDatesAndRefresh = () => {
         setInputValue($checkinInput, "");
         setInputValue($checkoutInput, "");
-        window.mvAvailabilityById = {};
         $availabilityStatus.textContent = "";
         $availabilityPrice.textContent = "";
         updateDatesDisplay();
         updateSearchBtnState();
         renderWithFilters();
         updateSavedCount(false);
-        updateModalIfOpen();
     };
     const setInputValue = (input, value) => {
         input.value = value;
@@ -1432,12 +1339,11 @@
             }
             for (let day = 1; day <= daysInMonth; day += 1) {
                 const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
-                const blocked = window.__lastGoodBlockedDays || new Set();
                 const yyyy = date.getFullYear();
                 const mm = String(date.getMonth() + 1).padStart(2, "0");
                 const dd = String(date.getDate()).padStart(2, "0");
                 const iso = `${yyyy}-${mm}-${dd}`;
-                const isDisabled = date < today || blocked.has(iso);
+                const isDisabled = date < today;
                 const isStart = calendarStart && toISODate(date) === toISODate(calendarStart);
                 const isEnd = calendarEnd && toISODate(date) === toISODate(calendarEnd);
                 const inRange = calendarStart && calendarEnd && date > calendarStart && date < calendarEnd;
@@ -1497,7 +1403,6 @@
         setInputValue($checkoutInput, toISODate(calendarEnd));
         updateDatesDisplay();
         updateSearchBtnState();
-        updateModalIfOpen();
         closeCalendar();
     });
     document.addEventListener("keydown", (event) => {
@@ -1584,31 +1489,11 @@
     }
 
     function openModal(p) {
-                // Shared modal-only validation helper
-                function validateModalDates() {
-                    const checkinInput = $("mvCheckin");
-                    const checkoutInput = $("mvCheckout");
-                    clearBlockedMessage();
-                    if (!checkinInput || !checkoutInput) return;
-                    if (checkinInput.value && isDateBlocked(checkinInput.value)) {
-                        checkinInput.value = '';
-                        showBlockedMessage('Selected check-in date is unavailable.');
-                    }
-                    if (checkoutInput.value && isDateBlocked(checkoutInput.value)) {
-                        checkoutInput.value = '';
-                        showBlockedMessage('Selected check-out date is unavailable.');
-                    }
-                    if (checkinInput.value && checkoutInput.value && isRangeBlocked(checkinInput.value, checkoutInput.value)) {
-                        checkoutInput.value = '';
-                        showBlockedMessage('Selected date range overlaps an unavailable booking.');
-                    }
-                }
         const checkin = $("mvCheckin").value;
         const checkout = $("mvCheckout").value;
         const guests = $("mvGuests").value;
-        // Hostaway listings (the only inventory source since U1) get the live
-        // calendar, night selection and server-validated quote (U2–U4). The
-        // non-Hostaway branch below is legacy and unreachable; its removal is U5b.
+        // Inventory is Hostaway-only (toProperty() is the single source). The
+        // guard is kept defensively: an unknown source gets no calendar or price.
         const isHostaway = p.source === "hostaway";
 
         const modalImage = p.img
@@ -1618,13 +1503,6 @@
         const modalNote = isHostaway
             ? "Pick a check-in night and a check-out day on the calendar, then check the price. Prices come from the property management system and are currently displayed in Mexican pesos (MXN)."
             : "Live availability and pricing are not connected for this property.";
-        const modalActions = isHostaway ? "" : `
-                    <div class="mv-actions">
-                        <div id="mvModalBooking"></div>
-                        <button id="mvReserveBtn" class="mv-btn mv-btn--primary" type="button">Check availability</button>
-                        <div id="mvModalChargeNote" class="mv-modal__note"></div>
-                        <!-- Removed redundant Done button — modal closes via X or Reserve only. -->
-                    </div>`;
         const modalLink = p.url ? `<a class="mv-link" href="${esc(p.url)}" target="_blank" rel="noopener">Open full property page →</a>` : "";
         // U2: read-only live calendar for Hostaway listings (per-listing state, departure-exclusive).
         const modalCalendar = isHostaway ? `
@@ -1660,7 +1538,6 @@
                         ${modalNote}
                     </div>
                     ${modalCalendar}
-                    ${modalActions}
                     ${modalLink}
                 </div>
             </div>
@@ -1676,314 +1553,10 @@
             if (prevSel && prevSel.message) selectionByListing.set(key, { start: prevSel.start || null, end: prevSel.end || null });
             quoteByListing.delete(key);
             loadHostawayCalendar(p.id); // live calendar + selection + quote; no reserve/checkout action exists
-            return;
-        }
-
-        $("mvReserveBtn").addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            checkAvailability();
-        });
-
-        // Modal-only unavailable-date protection
-        let modalBlockedRanges = [];
-        let modalBlockedMessage = null;
-        // Fetch reservations for selected apartment
-        const apartmentId = window.mvSelectedApartmentId;
-        if (apartmentId) {
-            fetch(`${API_BASE}/api/smoobu/reservations?apartmentId=${encodeURIComponent(apartmentId)}`)
-                .then(resp => resp.json())
-                .then(data => {
-                    // TODO: If response shape unclear, verify exact field names
-                    // Example expected: data.reservations (array of { arrival, departure })
-                    if (Array.isArray(data.reservations)) {
-                        modalBlockedRanges = data.reservations.map(r => ({
-                            from: r.arrival,
-                            to: r.departure
-                        }));
-                    } else {
-                        modalBlockedRanges = [];
-                    }
-                    // Immediate validation for pre-populated dates
-                    validateModalDates();
-                })
-                .catch(() => { modalBlockedRanges = []; });
-        }
-
-        // Helper: check if date falls in blocked range
-        function isDateBlocked(dateStr) {
-            const date = new Date(dateStr);
-            return modalBlockedRanges.some(r => {
-                const from = new Date(r.from);
-                const to = new Date(r.to);
-                return date >= from && date <= to;
-            });
-        }
-
-        // Helper: check if range overlaps blocked
-        function isRangeBlocked(startStr, endStr) {
-            const start = new Date(startStr);
-            const end = new Date(endStr);
-            return modalBlockedRanges.some(r => {
-                const from = new Date(r.from);
-                const to = new Date(r.to);
-                return (start <= to && end >= from);
-            });
-        }
-
-        // Show message if blocked
-        function showBlockedMessage(msg) {
-            if (!modalBlockedMessage) {
-                modalBlockedMessage = document.createElement('div');
-                modalBlockedMessage.style.color = '#b91c1c';
-                modalBlockedMessage.style.fontSize = '13px';
-                modalBlockedMessage.style.marginTop = '8px';
-                $modalContent.appendChild(modalBlockedMessage);
-            }
-            modalBlockedMessage.textContent = msg;
-        }
-        function clearBlockedMessage() {
-            if (modalBlockedMessage) modalBlockedMessage.textContent = '';
-        }
-
-        // Attach validation to modal date inputs
-        setTimeout(() => {
-            const checkinInput = $("mvCheckin");
-            const checkoutInput = $("mvCheckout");
-            if (!checkinInput || !checkoutInput) return;
-            checkinInput.addEventListener("change", () => {
-                clearBlockedMessage();
-                if (isDateBlocked(checkinInput.value)) {
-                    checkinInput.value = '';
-                    showBlockedMessage('Selected check-in date is unavailable.');
-                } else if (checkoutInput.value && isRangeBlocked(checkinInput.value, checkoutInput.value)) {
-                    checkoutInput.value = '';
-                    showBlockedMessage('Selected date range overlaps an unavailable booking.');
-                }
-            });
-            checkoutInput.addEventListener("change", () => {
-                clearBlockedMessage();
-                if (isDateBlocked(checkoutInput.value)) {
-                    checkoutInput.value = '';
-                    showBlockedMessage('Selected check-out date is unavailable.');
-                } else if (checkinInput.value && isRangeBlocked(checkinInput.value, checkoutInput.value)) {
-                    checkoutInput.value = '';
-                    showBlockedMessage('Selected date range overlaps an unavailable booking.');
-                }
-            });
-        }, 300);
-
-        // Revalidate on reserve
-        const reserveBtn = $("mvReserveBtn");
-        if (reserveBtn) {
-            reserveBtn.addEventListener("click", () => {
-                clearBlockedMessage();
-                const checkinInput = $("mvCheckin");
-                const checkoutInput = $("mvCheckout");
-                if (checkinInput && checkoutInput && checkinInput.value && checkoutInput.value) {
-                    if (isRangeBlocked(checkinInput.value, checkoutInput.value)) {
-                        showBlockedMessage('Selected date range overlaps an unavailable booking.');
-                        checkinInput.value = '';
-                        checkoutInput.value = '';
-                        return;
-                    }
-                }
-            });
-        }
-
-        // Fetch reservations and render calendar with blocked dates
-        const apartmentIdNum = Number(window.mvSelectedApartmentId);
-        if (apartmentIdNum) {
-            fetch(`${API_BASE}/api/smoobu/reservations?apartmentId=${apartmentIdNum}`)
-                .then(resp => resp.json())
-                .then(data => {
-                    // Map reservations to blocked days
-                    let blockedDays = new Set();
-                    if (Array.isArray(data.reservations)) {
-                        data.reservations.forEach(r => {
-                            const from = new Date(r.arrival);
-                            const to = new Date(r.departure);
-                            for (let d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
-                                blockedDays.add(d.toISOString().slice(0,10));
-                            }
-                        });
-                    }
-                    // Force visible calendar re-render with blocked days
-                    renderModalBookingWidget(blockedDays);
-                })
-                .catch(() => {
-                    renderModalBookingWidget(new Set());
-                });
-        } else {
-            renderModalBookingWidget(new Set());
         }
     }
-
     function closeModal() {
         $modal.setAttribute("aria-hidden", "true");
-    }
-
-    // Modal dates are now a clickable field (Airbnb-style) that opens the existing calendar.
-    function renderModalBookingWidget(blockedDays = new Set()) {
-            if (blockedDays && blockedDays.size > 0) {
-                window.__lastGoodBlockedDays = blockedDays;
-            } else if (window.__lastGoodBlockedDays && window.__lastGoodBlockedDays.size > 0) {
-                blockedDays = window.__lastGoodBlockedDays;
-            }
-        if ($modal.getAttribute("aria-hidden") !== "false") return;
-        const container = $("mvModalBooking");
-        if (!container) return;
-        const checkIn = $checkinInput.value;
-        const checkOut = $checkoutInput.value;
-        const hasDates = Boolean(checkIn && checkOut);
-        const inDate = parseISODate(checkIn);
-        const outDate = parseISODate(checkOut);
-        const checkInLabel = hasDates && inDate ? formatDisplayDate(inDate) : "Add dates";
-        const checkOutLabel = hasDates && outDate ? formatDisplayDate(outDate) : "Add dates";
-
-        container.innerHTML = `
-            <div id="mvModalDatesField" class="mv-dateField" role="button" tabindex="0" aria-label="Change dates">
-                <div>
-                    <div class="mv-dateField__label">Check-in</div>
-                    <div class="mv-dateField__value">${checkInLabel}</div>
-                </div>
-                <div>
-                    <div class="mv-dateField__label">Checkout</div>
-                    <div class="mv-dateField__value">${checkOutLabel}</div>
-                </div>
-            </div>
-        `;
-
-        // Render custom calendar month with blocked days
-        const calendarMonths = $("mvCalendarMonths");
-        if (calendarMonths) {
-            calendarMonths.innerHTML = "";
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            const base = new Date();
-            base.setDate(1);
-            const monthDate = new Date(base.getFullYear(), base.getMonth(), 1);
-            const monthTitle = monthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
-            const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
-            const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
-
-            const monthEl = document.createElement("div");
-            monthEl.className = "mv-cal__month";
-            monthEl.innerHTML = `
-                <div class="mv-cal__title">${monthTitle}</div>
-                <div class="mv-cal__weekdays">
-                    <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
-                </div>
-                <div class="mv-cal__grid"></div>
-            `;
-            const grid = monthEl.querySelector(".mv-cal__grid");
-            for (let i = 0; i < firstDay; i += 1) {
-                grid.appendChild(document.createElement("div"));
-            }
-            for (let day = 1; day <= daysInMonth; day += 1) {
-                                const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
-                                const yyyy = date.getFullYear();
-                                const mm = String(date.getMonth() + 1).padStart(2, "0");
-                                const dd = String(date.getDate()).padStart(2, "0");
-                                const iso = `${yyyy}-${mm}-${dd}`;
-                                const isBlocked = blockedDays.has(iso);
-                                const isDisabled = date < today || isBlocked;
-                                const btn = document.createElement("button");
-                                btn.type = "button";
-                                btn.className = "mv-cal__day";
-                                btn.textContent = String(day);
-                                btn.dataset.date = iso;
-                                if (isDisabled) btn.classList.add("is-disabled");
-                                grid.appendChild(btn);
-            }
-            calendarMonths.appendChild(monthEl);
-        }
-
-        const cta = $("mvReserveBtn");
-        if (cta) cta.textContent = hasDates ? "Reserve" : "Check availability";
-
-        const note = $("mvModalChargeNote");
-        if (note) note.textContent = hasDates ? "You won’t be charged yet" : "";
-
-        const datesField = $("mvModalDatesField");
-        if (datesField) {
-            datesField.addEventListener("click", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                openCalendar();
-            });
-            datesField.addEventListener("keydown", (event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    openCalendar();
-                }
-            });
-        }
-    }
-
-    async function checkAvailability() {
-        const checkIn = $("mvCheckin").value;
-        const checkOut = $("mvCheckout").value;
-        const apartmentId = window.mvSelectedApartmentId;
-
-        if (!apartmentId) {
-            $availabilityStatus.textContent = "Select an apartment first.";
-            $availabilityPrice.textContent = "";
-            return;
-        }
-        if (!checkIn || !checkOut) {
-            $availabilityStatus.textContent = "Select check-in and check-out dates.";
-            $availabilityPrice.textContent = "";
-            return;
-        }
-
-        $availabilityStatus.textContent = "Checking availability...";
-        $availabilityPrice.textContent = "";
-
-        try {
-            // Ensure apartmentId is a finite number
-            const apartmentIdNum = Number(apartmentId);
-            // Ensure dates are YYYY-MM-DD
-            const toYYYYMMDD = (dateStr) => {
-                const d = new Date(dateStr);
-                if (isNaN(d)) return "";
-                return d.toISOString().slice(0, 10);
-            };
-            const arrival = toYYYYMMDD(checkIn);
-            const departure = toYYYYMMDD(checkOut);
-            const params = new URLSearchParams({
-                apartmentId: String(apartmentIdNum),
-                arrival,
-                departure
-            });
-            const url = `${API_BASE}/api/smoobu/availability?${params.toString()}`;
-            const response = await fetch(url);
-            if (!response.ok) {
-                const errText = await response.text();
-                console.error("[availability error]", response.status, errText);
-                throw new Error(`Availability error: ${response.status}`);
-            }
-            const data = await response.json();
-            const available = data?.available ?? data?.isAvailable ?? data?.availability?.available;
-            const price = data?.price ?? data?.nightlyPrice ?? data?.availability?.price;
-
-            if (available === true) {
-                $availabilityStatus.textContent = "Available";
-            } else if (available === false) {
-                $availabilityStatus.textContent = "Unavailable";
-            } else {
-                $availabilityStatus.textContent = "Availability status unknown.";
-            }
-
-            if (price != null && price !== "") {
-                // UI currency label only; pricing math unchanged.
-                $availabilityPrice.textContent = `Nightly price: $${price} USD`;
-            }
-        } catch (err) {
-            $availabilityStatus.textContent = "Unable to check availability right now.";
-            $availabilityPrice.textContent = "";
-            console.error("Failed to check availability:", err);
-        }
     }
 
     function runSearch() {
@@ -2008,19 +1581,16 @@
         const checkIn = $("mvCheckin").value;
         const checkOut = $("mvCheckout").value;
         const guests = $("mvGuests").value;
-        const availabilityById = window.mvAvailabilityById || {};
-        window.mvAvailabilityById = availabilityById;
         const allCards = Array.from($results.querySelectorAll(".mv-card"));
         // U4: Hostaway cards get one server-validated quote each (sequential).
         const hostawayCards = allCards.filter((card) => card.dataset.source === "hostaway");
-        let hostawayResults = null;
         if (hostawayCards.length) {
             if (!checkIn || !checkOut) {
                 $availabilityStatus.textContent = "Select check-in and check-out dates.";
             } else {
                 hostawayCards.forEach((card) => { card.style.display = ""; card.classList.remove("is-unconfirmed"); const s = card.querySelector(".mv-card__meta span:last-child"); if (s) s.textContent = "Checking…"; });
                 $availabilityStatus.textContent = "Checking availability…";
-                hostawayResults = await quoteHostawayCards(hostawayCards, checkIn, checkOut, currentGuests(), seq);
+                const hostawayResults = await quoteHostawayCards(hostawayCards, checkIn, checkOut, currentGuests(), seq);
                 if (hostawayResults === null) { // superseded by a newer search/change: leave the (already cleared) UI alone
                     $searchBtn.disabled = false;
                     $searchBtn.textContent = originalLabel;
@@ -2028,105 +1598,11 @@
                 }
                 renderHostawaySearchSummary(hostawayResults, hostawayCards);
             }
-        }
-        const cards = allCards.filter((card) => card.dataset.source !== "hostaway");
-
-        for (const card of cards) {
-            const apartmentId = card.dataset.apartmentId;
-            if (!apartmentId) {
-                card.style.display = "none";
-                continue;
-            }
-
-            try {
-                const params = new URLSearchParams({
-                    apartmentId: String(apartmentId),
-                    arrival: checkIn,
-                    departure: checkOut
-                });
-                const url = `${API_BASE}/api/smoobu/availability?${params.toString()}`;
-                const resp = await fetch(url);
-                if (!resp.ok) {
-                    const errText = await resp.text();
-                    console.error("[availability error]", resp.status, errText);
-                    throw new Error(`Availability error: ${resp.status}`);
-                }
-                const data = await resp.json();
-                const available = data?.available ?? data?.isAvailable ?? data?.availability?.available;
-                const nightlyPrice = data?.nightlyPrice ?? data?.price ?? data?.availability?.price;
-
-                availabilityById[apartmentId] = { available, nightlyPrice };
-
-                if (available === true) {
-                    card.style.display = "";
-                    const subtitle = card.querySelector(".mv-card__meta span:last-child");
-                    if (subtitle) {
-                        const priceText = nightlyPrice != null && nightlyPrice !== "" ? nightlyPrice : "—";
-                        subtitle.textContent = `Nightly price: $${priceText} USD`;
-                    }
-                    const listItem = $apartmentsList.querySelector(`[data-apartment-id="${apartmentId}"]`);
-                    if (listItem) listItem.style.display = "";
-                } else {
-                    card.style.display = "none";
-                    const listItem = $apartmentsList.querySelector(`[data-apartment-id="${apartmentId}"]`);
-                    if (listItem) listItem.style.display = "none";
-                }
-            } catch (err) {
-                card.style.display = "none";
-                const listItem = $apartmentsList.querySelector(`[data-apartment-id="${apartmentId}"]`);
-                if (listItem) listItem.style.display = "none";
-                availabilityById[apartmentId] = { available: false };
-                console.error("Failed to check availability:", err);
-            }
-        }
-
-        cards.forEach((card) => {
-            const apartmentId = card.dataset.apartmentId;
-            const result = availabilityById[apartmentId];
-            if (result?.available === false) {
-                card.style.display = "none";
-            }
-            if (result?.available === true) {
-                card.style.display = "";
-            }
-        });
-
-        $apartmentsList.querySelectorAll(".mv-apartments__group").forEach((header) => {
-            let next = header.nextElementSibling;
-            let hasVisible = false;
-            while (next && !next.classList.contains("mv-apartments__group")) {
-                if (next.style.display !== "none") {
-                    hasVisible = true;
-                    break;
-                }
-                next = next.nextElementSibling;
-            }
-            header.style.display = hasVisible ? "" : "none";
-        });
-
-        // UI summary uses min nightlyPrice from current rendered available units; pricing logic unchanged.
-        const availableCards = cards.filter((card) => card.style.display !== "none");
-        if (!cards.length && hostawayCards.length) {
-            // Only Hostaway cards on the page: the summary was already written by renderHostawaySearchSummary (U4).
-        } else if (!availableCards.length) {
+        } else {
+            // No cards passed the local guest filter (pre-existing footer behaviour).
             $availabilityStatus.textContent = "No availability for these dates";
             $availabilityPrice.textContent = "";
-        } else {
-            const prices = availableCards
-                .map((card) => availabilityById[card.dataset.apartmentId]?.nightlyPrice)
-                .map((value) => Number(value))
-                .filter((value) => Number.isFinite(value));
-            if (!prices.length) {
-                $availabilityStatus.textContent = "Available · Select dates to see price";
-                $availabilityPrice.textContent = "";
-            } else {
-                const minPrice = Math.min(...prices);
-                const priceLabel = Number.isInteger(minPrice) ? String(minPrice) : minPrice.toFixed(2);
-                $availabilityStatus.textContent = `Available · Nightly price from $${priceLabel} USD`;
-                $availabilityPrice.textContent = "";
-            }
         }
-
         $searchBtn.disabled = false;
         $searchBtn.textContent = originalLabel;
     });
@@ -2146,10 +1622,6 @@
     $("mvGuests").addEventListener("change", runSearch);
     $("mvCheckin").addEventListener("input", updateSearchBtnState);
     $("mvCheckout").addEventListener("input", updateSearchBtnState);
-    $("mvCheckin").addEventListener("change", updateModalIfOpen);
-    $("mvCheckout").addEventListener("change", updateModalIfOpen);
-    $("mvCheckin").addEventListener("input", updateModalIfOpen);
-    $("mvCheckout").addEventListener("input", updateModalIfOpen);
 
     $results.addEventListener("click", (e) => {
         const innerAction = e.target.closest("button, a");
@@ -2187,14 +1659,6 @@
             card.classList.add("mv-selected");
             openModal(p);
         }
-    });
-
-    $apartmentsList.addEventListener("click", (e) => {
-        const item = e.target.closest("[data-apartment-id]");
-        if (!item) return;
-        window.mvSelectedApartmentId = String(item.dataset.apartmentId);
-        document.querySelectorAll(".mv-selected").forEach((el) => el.classList.remove("mv-selected"));
-        item.classList.add("mv-selected");
     });
 
     $modal.addEventListener("click", (e) => {
