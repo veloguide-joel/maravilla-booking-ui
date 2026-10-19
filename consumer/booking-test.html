@@ -63,6 +63,26 @@
 <!-- UX1: dedicated property view (same document; shown instead of #mv-app on /property/:id). Non-bookable at this stage. -->
 <div id="mvPropertyView" class="mv-prop mv-view-hidden" aria-live="polite"></div>
 
+<!-- UX2b: full-screen photo viewer for the property view. Separate from the booking modal and calendar (own ids, own key handling). -->
+<div id="mvGallery" class="mv-gallery" aria-hidden="true" hidden>
+    <div id="mvGalleryPanel" class="mv-gallery__panel" role="dialog" aria-modal="true" aria-labelledby="mvGalleryTitle" tabindex="-1">
+        <div class="mv-gallery__bar">
+            <button id="mvGalleryClose" class="mv-gallery__close" type="button" aria-label="Close photos">✕ Close</button>
+            <div id="mvGalleryTitle" class="mv-gallery__title"></div>
+            <div id="mvGalleryCount" class="mv-gallery__count" aria-hidden="true"></div>
+        </div>
+        <div id="mvGalleryLive" class="mv-gallery__sr" aria-live="polite"></div>
+        <div id="mvGalleryStage" class="mv-gallery__stage">
+            <button id="mvGalleryPrev" class="mv-gallery__nav mv-gallery__nav--prev" type="button" aria-label="Previous photo">&#8249;</button>
+            <figure class="mv-gallery__figure">
+                <img id="mvGalleryImg" class="mv-gallery__img" alt="" decoding="async">
+                <div id="mvGalleryError" class="mv-gallery__error" hidden>This photo could not be loaded.</div>
+            </figure>
+            <button id="mvGalleryNext" class="mv-gallery__nav mv-gallery__nav--next" type="button" aria-label="Next photo">&#8250;</button>
+        </div>
+    </div>
+</div>
+
 <div id="mvModal" class="mv-modal" aria-hidden="true">
     <div class="mv-modal__backdrop" data-close="1"></div>
     <div class="mv-modal__panel" role="dialog" aria-modal="true" aria-label="Property details">
@@ -613,6 +633,67 @@
     .mv-prop__empty{ padding: 24px 0; }
     .mv-prop__empty h1{ font-size: 22px; margin: 0 0 6px; }
     @media(max-width: 760px){ .mv-prop__title{ font-size: 22px; } .mv-prop__hero{ aspect-ratio: 4 / 3; border-radius: 14px; } }
+    /* UX2b: property photo gallery — desktop mosaic (one large + up to four), mobile swipe carousel.
+       One set of tiles serves both layouts; tiles 6+ are display:none on desktop (so their lazy images never load there). */
+    .mv-gal{ position: relative; margin: 0 0 4px; }
+    .mv-gal__track{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; height: clamp(280px, 36vw, 440px); border-radius: 18px; overflow: hidden; }
+    .mv-gal__tile{ position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #ececec; cursor: zoom-in; }
+    .mv-gal__tile--extra{ display: none; }
+    .mv-gal__img{ width: 100%; height: 100%; object-fit: cover; display: block; transition: filter .2s ease; }
+    .mv-gal .mv-gal__img.mv-prop__hero{ aspect-ratio: auto; border-radius: 0; background: #ececec; }
+    .mv-gal__tile:hover .mv-gal__img{ filter: brightness(.9); }
+    .mv-gal[data-count="1"] .mv-gal__track{ height: clamp(260px, 34vw, 420px); }
+    .mv-gal[data-count="1"] .mv-gal__tile:nth-child(1){ grid-column: 1 / -1; grid-row: 1 / -1; }
+    .mv-gal:not([data-count="1"]) .mv-gal__tile:nth-child(1){ grid-column: 1 / 3; grid-row: 1 / 3; }
+    .mv-gal[data-count="2"] .mv-gal__tile:nth-child(2){ grid-column: 3 / 5; grid-row: 1 / 3; }
+    .mv-gal[data-count="3"] .mv-gal__tile:nth-child(2){ grid-column: 3 / 5; grid-row: 1; }
+    .mv-gal[data-count="3"] .mv-gal__tile:nth-child(3){ grid-column: 3 / 5; grid-row: 2; }
+    .mv-gal[data-count="4"] .mv-gal__tile:nth-child(2){ grid-column: 3 / 5; grid-row: 1; }
+    .mv-gal__tile.is-broken{ display: flex; align-items: center; justify-content: center; cursor: default; }
+    .mv-gal__tile.is-broken .mv-gal__img{ display: none; }
+    .mv-gal__broken{ font-size: 13px; color: #555; padding: 8px; text-align: center; }
+    .mv-gal__all{ position: absolute; right: 14px; bottom: 14px; background: #fff; color: #222; border: 1px solid #222; border-radius: 10px; padding: 8px 12px; font: 600 14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+    .mv-gal__all:hover{ background: #f7f7f7; }
+    .mv-gal__all:focus-visible, .mv-gal__nav:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
+    .mv-gal__count, .mv-gal__nav{ display: none; }
+    @media(max-width: 760px){
+        .mv-gal__track{ display: flex; height: auto; gap: 0; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; border-radius: 14px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .mv-gal__track::-webkit-scrollbar{ display: none; }
+        .mv-gal__tile, .mv-gal__tile.mv-gal__tile--extra{ display: block; flex: 0 0 100%; aspect-ratio: 4 / 3; scroll-snap-align: start; scroll-snap-stop: always; cursor: pointer; }
+        .mv-gal__tile.is-broken{ display: flex; }
+        .mv-gal[data-count="1"] .mv-gal__track{ height: auto; }
+        .mv-gal__count{ display: block; position: absolute; right: 10px; bottom: 10px; background: rgba(0,0,0,.66); color: #fff; font: 600 12px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; padding: 5px 9px; border-radius: 999px; pointer-events: none; font-variant-numeric: tabular-nums; }
+        .mv-gal__all{ left: 10px; right: auto; bottom: 10px; padding: 6px 10px; font-size: 13px; border-color: transparent; }
+        .mv-gal__nav{ display: flex; align-items: center; justify-content: center; position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgba(255,255,255,.92); color: #222; font-size: 22px; line-height: 1; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+        .mv-gal__nav--prev{ left: 8px; }
+        .mv-gal__nav--next{ right: 8px; }
+        .mv-gal__nav:disabled{ visibility: hidden; }
+        .mv-gal[data-count="1"] .mv-gal__nav, .mv-gal[data-count="1"] .mv-gal__count{ display: none; }
+    }
+    /* UX2b: full-screen photo viewer */
+    .mv-gallery{ position: fixed; inset: 0; z-index: 10050; background: #111; color: #fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    .mv-gallery[hidden]{ display: none; }
+    html.mv-gallery-open{ overflow: hidden; }
+    .mv-gallery__panel{ height: 100%; display: flex; flex-direction: column; outline: none; }
+    .mv-gallery__bar{ display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+    .mv-gallery__close{ background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.45); border-radius: 10px; padding: 8px 12px; font: 600 14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; cursor: pointer; }
+    .mv-gallery__title{ flex: 1; min-width: 0; font-size: 14px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+    .mv-gallery__count{ min-width: 56px; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .mv-gallery__stage{ position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 16px 20px; touch-action: pan-y; }
+    .mv-gallery__figure{ margin: 0; flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; justify-content: center; }
+    .mv-gallery__img{ max-width: 100%; max-height: 100%; object-fit: contain; display: block; user-select: none; -webkit-user-drag: none; }
+    .mv-gallery__error{ font-size: 14px; opacity: .85; }
+    .mv-gallery__nav{ flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.45); background: rgba(255,255,255,.08); color: #fff; font-size: 26px; line-height: 1; cursor: pointer; }
+    .mv-gallery__nav:disabled{ opacity: .3; cursor: default; }
+    .mv-gallery__close:focus-visible, .mv-gallery__nav:focus-visible{ outline: 2px solid #fff; outline-offset: 2px; }
+    .mv-gallery__sr{ position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    @media(max-width: 760px){
+        .mv-gallery__bar{ padding: 10px 12px; }
+        .mv-gallery__stage{ padding: 0 0 16px; }
+        .mv-gallery__nav{ position: absolute; top: 50%; transform: translateY(-50%); z-index: 1; width: 38px; height: 38px; font-size: 22px; background: rgba(0,0,0,.45); }
+        .mv-gallery__nav--prev{ left: 8px; }
+        .mv-gallery__nav--next{ right: 8px; }
+    }
     @media(max-width: 760px){
         .mv-calendar__months{ grid-template-columns: 1fr; }
         .mv-calendar__panel{ margin: 6vh 12px; }
@@ -730,6 +811,17 @@
     const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const httpsUrl = (v) => (typeof v === "string" && /^https:\/\/[^\s"'<>]+$/i.test(v) ? v : null);
     const posInt = (v) => (Number.isInteger(v) && v > 0 ? v : null);
+    const MAX_GALLERY_IMAGES = 12; // the public feed sends at most 12 (lib/listing-public.js MAX_PUBLIC_IMAGES)
+    /** UX2b: ordered, de-duplicated https photo URLs. The card image (`img`) leads so the gallery opens on the photo
+     *  the guest clicked; then `images[].url` in feed order. Malformed entries are dropped, never repaired. Captions
+     *  are not used (none are published today and none have been reviewed for public display). */
+    function galleryUrls(l) {
+        const out = [];
+        const add = (u) => { const ok = httpsUrl(u); if (ok && !out.includes(ok) && out.length < MAX_GALLERY_IMAGES) out.push(ok); };
+        add(l.img);
+        if (Array.isArray(l.images)) for (const i of l.images) add(i && typeof i === "object" ? i.url : null);
+        return out;
+    }
     // Validate one listing from the API. Anything unusable is skipped, never invented.
     function toProperty(l) {
         if (!l || typeof l !== "object") return null;
@@ -746,6 +838,7 @@
             tagline: typeof l.tagline === "string" ? l.tagline : "",
             summary: typeof l.summary === "string" ? l.summary : "",
             img: httpsUrl(l.img),
+            images: galleryUrls(l), // UX2b: property-page gallery only (cards and the modal keep using `img`)
             currency: typeof l.currency === "string" ? l.currency : null,
             url: httpsUrl(l.url),
             // UX1: facts the public feed already sends (F1 whitelist); null when absent, never guessed
@@ -2115,6 +2208,150 @@
         return `?${q}`;
     }
     const factPill = (text) => { const el = document.createElement("span"); el.className = "mv-pill"; el.textContent = text; return el; };
+
+    // ---- UX2b: property photo gallery (presentation only; no API calls, no booking state) ----
+    // Inline: mosaic on desktop, swipe carousel on mobile (same tiles, CSS decides). "Show all photos" opens the
+    // full-screen viewer (#mvGallery), which has its own ids and handles its own keys (stopPropagation), so the
+    // search calendar / booking modal Escape handlers never see them. Labels use only the verified property name
+    // and the photo position — no invented captions.
+    const GALLERY_TEXT = {
+        showAll: "Show all photos",
+        label: (name, i, n) => `${name} — photo ${i} of ${n}`,
+        unavailable: "Photo unavailable",
+        live: (i, n) => `Photo ${i} of ${n}`
+    };
+    const GALLERY_MOSAIC_MAX = 5;
+    const reducedMotion = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    function markTileBroken(tile, label) {
+        if (tile.classList.contains("is-broken")) return;
+        tile.classList.add("is-broken");
+        tile.setAttribute("role", "img"); tile.setAttribute("aria-label", label);
+        const span = document.createElement("span"); span.className = "mv-gal__broken"; span.textContent = GALLERY_TEXT.unavailable; span.setAttribute("aria-hidden", "true");
+        tile.appendChild(span);
+    }
+    function buildGallery(p) {
+        const urls = p.images, n = urls.length;
+        const wrap = document.createElement("section");
+        wrap.className = "mv-gal"; wrap.id = "mvPropGallery"; wrap.dataset.count = String(Math.min(n, GALLERY_MOSAIC_MAX));
+        wrap.setAttribute("aria-label", `Photos of ${p.name}`);
+        const track = document.createElement("div"); track.className = "mv-gal__track"; track.id = "mvPropGalleryTrack";
+        urls.forEach((url, i) => {
+            const tile = document.createElement("div"); tile.className = "mv-gal__tile"; tile.dataset.index = String(i);
+            if (i >= GALLERY_MOSAIC_MAX) tile.classList.add("mv-gal__tile--extra");
+            const img = document.createElement("img");
+            img.className = i === 0 ? "mv-gal__img mv-prop__hero" : "mv-gal__img"; // first photo keeps the UX1 hero hook
+            img.alt = GALLERY_TEXT.label(p.name, i + 1, n);
+            img.decoding = "async";
+            img.loading = i === 0 ? "eager" : "lazy"; // set before src so the lazy hint applies
+            if (i === 0) img.setAttribute("fetchpriority", "high");
+            img.addEventListener("error", () => markTileBroken(tile, `${img.alt} (${GALLERY_TEXT.unavailable.toLowerCase()})`), { once: true });
+            img.src = url;
+            tile.appendChild(img); track.appendChild(tile);
+        });
+        wrap.appendChild(track);
+
+        const all = document.createElement("button"); all.type = "button"; all.className = "mv-gal__all"; all.id = "mvPropGalleryAll";
+        all.textContent = n > 1 ? `${GALLERY_TEXT.showAll} (${n})` : GALLERY_TEXT.showAll;
+        const count = document.createElement("div"); count.className = "mv-gal__count"; count.id = "mvPropGalleryCount"; count.setAttribute("aria-hidden", "true");
+        const prev = document.createElement("button"); prev.type = "button"; prev.className = "mv-gal__nav mv-gal__nav--prev"; prev.id = "mvPropGalleryPrev"; prev.setAttribute("aria-label", "Previous photo"); prev.innerHTML = "&#8249;";
+        const next = document.createElement("button"); next.type = "button"; next.className = "mv-gal__nav mv-gal__nav--next"; next.id = "mvPropGalleryNext"; next.setAttribute("aria-label", "Next photo"); next.innerHTML = "&#8250;";
+        wrap.append(prev, next, count, all);
+
+        // Carousel position (meaningful on mobile, where the track scrolls; 0 on desktop).
+        const index = () => (track.clientWidth ? Math.max(0, Math.min(n - 1, Math.round(track.scrollLeft / track.clientWidth))) : 0);
+        const sync = () => { const i = index(); count.textContent = `${i + 1} / ${n}`; prev.disabled = i === 0; next.disabled = i >= n - 1; };
+        let raf = 0;
+        track.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; sync(); }); }, { passive: true });
+        const go = (d) => { const i = Math.max(0, Math.min(n - 1, index() + d)); track.scrollTo({ left: i * track.clientWidth, behavior: reducedMotion() ? "auto" : "smooth" }); };
+        prev.addEventListener("click", () => go(-1));
+        next.addEventListener("click", () => go(1));
+        all.addEventListener("click", () => openGallery(p, index(), all));
+        track.addEventListener("click", (e) => {
+            const tile = e.target.closest(".mv-gal__tile");
+            if (tile && track.contains(tile) && !tile.classList.contains("is-broken")) openGallery(p, Number(tile.dataset.index), all);
+        });
+        sync();
+        return wrap;
+    }
+
+    const $gallery = $("mvGallery"), $galleryPanel = $("mvGalleryPanel"), $galleryImg = $("mvGalleryImg"), $galleryError = $("mvGalleryError");
+    const $galleryCount = $("mvGalleryCount"), $galleryLive = $("mvGalleryLive"), $galleryTitle = $("mvGalleryTitle");
+    const $galleryPrev = $("mvGalleryPrev"), $galleryNext = $("mvGalleryNext"), $galleryClose = $("mvGalleryClose");
+    const gallery = { open: false, p: null, i: 0, opener: null };
+    const isGalleryOpen = () => gallery.open;
+    function showGalleryPhoto(i) {
+        const urls = gallery.p.images, n = urls.length;
+        const a = document.activeElement; // before any control is disabled below
+        gallery.i = Math.max(0, Math.min(n - 1, i));
+        const url = urls[gallery.i];
+        $galleryError.hidden = true; $galleryImg.hidden = false;
+        $galleryImg.onerror = () => { if ($galleryImg.getAttribute("src") === url) { $galleryImg.hidden = true; $galleryError.hidden = false; } };
+        $galleryImg.alt = GALLERY_TEXT.label(gallery.p.name, gallery.i + 1, n);
+        $galleryImg.src = url;
+        $galleryCount.textContent = `${gallery.i + 1} / ${n}`;
+        $galleryLive.textContent = GALLERY_TEXT.live(gallery.i + 1, n);
+        $galleryPrev.disabled = gallery.i === 0;
+        $galleryNext.disabled = gallery.i >= n - 1;
+        // A control that just became disabled drops focus to <body>; keep focus in the dialog.
+        if (gallery.open && a !== $galleryClose && (!a || a.disabled || !$gallery.contains(a))) {
+            const other = a === $galleryPrev ? $galleryNext : a === $galleryNext ? $galleryPrev : null;
+            (other && !other.disabled ? other : $galleryClose).focus();
+        }
+        // Warm only the neighbours (not the whole set).
+        for (const j of [gallery.i + 1, gallery.i - 1]) if (j >= 0 && j < n) { const pre = new Image(); pre.decoding = "async"; pre.src = urls[j]; }
+    }
+    function openGallery(p, start, opener) {
+        if (!p || !Array.isArray(p.images) || !p.images.length) return;
+        gallery.open = true; gallery.p = p; gallery.opener = opener || document.activeElement;
+        $galleryTitle.textContent = p.name;
+        $gallery.hidden = false; $gallery.setAttribute("aria-hidden", "false");
+        document.documentElement.classList.add("mv-gallery-open");
+        $propertyView.inert = true;
+        showGalleryPhoto(Number.isInteger(start) ? start : 0);
+        $galleryClose.focus();
+    }
+    function closeGallery({ restoreFocus = true } = {}) {
+        if (!gallery.open) return;
+        gallery.open = false;
+        $gallery.hidden = true; $gallery.setAttribute("aria-hidden", "true");
+        document.documentElement.classList.remove("mv-gallery-open");
+        $propertyView.inert = false;
+        $galleryImg.onerror = null; $galleryImg.removeAttribute("src");
+        const opener = gallery.opener; gallery.opener = null; gallery.p = null;
+        if (!restoreFocus) return;
+        const target = opener && opener.isConnected ? opener : $("mvPropGalleryAll");
+        if (target && typeof target.focus === "function") target.focus();
+    }
+    $galleryClose.addEventListener("click", () => closeGallery());
+    $galleryPrev.addEventListener("click", () => showGalleryPhoto(gallery.i - 1));
+    $galleryNext.addEventListener("click", () => showGalleryPhoto(gallery.i + 1));
+    // Capture phase on document: while the viewer is open it owns the keyboard, wherever focus is, and the search
+    // calendar / booking modal Escape handlers (document, bubble phase) never receive these keys.
+    document.addEventListener("keydown", (e) => {
+        if (!gallery.open) return;
+        const n = gallery.p.images.length;
+        let handled = true;
+        if (e.key === "Escape") closeGallery();
+        else if (e.key === "ArrowRight") showGalleryPhoto(gallery.i + 1);
+        else if (e.key === "ArrowLeft") showGalleryPhoto(gallery.i - 1);
+        else if (e.key === "Home") showGalleryPhoto(0);
+        else if (e.key === "End") showGalleryPhoto(n - 1);
+        else if (e.key === "Tab") { // keep focus inside the dialog
+            const f = [$galleryClose, $galleryPrev, $galleryNext].filter((b) => !b.disabled);
+            const at = f.indexOf(document.activeElement);
+            const nextIdx = at === -1 ? 0 : (at + (e.shiftKey ? -1 : 1) + f.length) % f.length;
+            f[nextIdx].focus();
+        } else handled = false;
+        if (handled) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+    let swipeX = null, swipeY = null;
+    $("mvGalleryStage").addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") { swipeX = e.clientX; swipeY = e.clientY; } });
+    $("mvGalleryStage").addEventListener("pointerup", (e) => {
+        if (swipeX === null) return;
+        const dx = e.clientX - swipeX, dy = e.clientY - swipeY; swipeX = swipeY = null;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) showGalleryPhoto(gallery.i + (dx < 0 ? 1 : -1));
+    });
+    $("mvGalleryStage").addEventListener("pointercancel", () => { swipeX = swipeY = null; });
     function renderPropertyView(id) {
         $propertyView.innerHTML = "";
         const back = document.createElement("a");
@@ -2138,10 +2375,8 @@
         const where = document.createElement("div"); where.className = "mv-prop__where";
         where.textContent = [p.city, "Nayarit, Mexico"].filter(Boolean).join(", ");
         $propertyView.appendChild(where);
-        if (p.img) {
-            const img = document.createElement("img"); img.className = "mv-prop__hero"; img.src = p.img; img.alt = p.name; img.loading = "eager";
-            img.addEventListener("error", () => { img.style.opacity = "0.7"; img.style.filter = "grayscale(1)"; }, { once: true });
-            $propertyView.appendChild(img);
+        if (p.images.length) {
+            $propertyView.appendChild(buildGallery(p)); // UX2b (replaces the UX1 single hero image)
         } else {
             const ph = document.createElement("div"); ph.className = "mv-prop__hero mv-card__noimg"; ph.setAttribute("role", "img"); ph.setAttribute("aria-label", "No photo available"); $propertyView.appendChild(ph);
         }
@@ -2166,6 +2401,7 @@
     /** Render whatever the current location asks for. Safe to call repeatedly (boot, listings loaded, popstate). */
     function renderRoute() {
         const id = parsePropertyRoute(window.location.pathname);
+        closeGallery({ restoreFocus: false }); // UX2b: a route change / re-render replaces the gallery the viewer belongs to
         if (id === null) { if (routeView !== "search") showView("search"); return; }
         if ($modal.getAttribute("aria-hidden") === "false") closeModal(); // the modal belongs to the search view
         showView("property");
