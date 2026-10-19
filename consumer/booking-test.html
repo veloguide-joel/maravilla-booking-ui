@@ -565,6 +565,10 @@
     .mv-quote__note{ opacity: .7; font-size: 12px; }
     .mv-quote .mv-btn{ padding: 4px 10px; font-size: 12px; margin-left: 6px; }
     .mv-card.is-unconfirmed{ opacity: .6; }
+    /* N2: property-modal selection — check-in filled, check-out outlined, occupied nights tinted (search picker styles untouched) */
+    .mv-cal__day--hostaway.is-inrange{ background: #ffe1e8; border-color: #ffe1e8; }
+    .mv-cal__day--hostaway.is-start{ background: #ff385c; border-color: #ff385c; color: #fff; font-weight: 700; }
+    .mv-cal__day--hostaway.is-end{ background: #fff; border: 2px solid #ff385c; color: #ff385c; font-weight: 700; }
     .mv-cal__day.is-blocked, .mv-hcal__swatch.is-blocked{
         background: #fde8ec;
         color: #b91c1c;
@@ -576,6 +580,8 @@
         color: #8a8a8a;
         border: 1px solid #e6e6e6;
     }
+    /* N2: a check-out day whose night is blocked keeps the blocked look and only gains the check-out outline (departure-exclusive) */
+    .mv-cal__day--hostaway.is-blocked.is-end{ border: 2px solid #ff385c; }
     .mv-modal{ overflow: auto; } /* tall modal content (calendar) scrolls instead of being clipped */
     @media(max-width: 760px){
         .mv-calendar__months{ grid-template-columns: 1fr; }
@@ -1087,10 +1093,16 @@
         }
         months.querySelectorAll(".mv-cal__day--hostaway").forEach((cell) => {
             const d = cell.dataset.date;
-            cell.classList.toggle("is-start", !!sel.start && d === sel.start);
-            cell.classList.toggle("is-end", !!sel.end && d === sel.end);
-            cell.classList.toggle("is-inrange", !!(sel.start && sel.end) && d > sel.start && d < sel.end);
+            const isStart = !!sel.start && d === sel.start, isEnd = !!sel.end && d === sel.end, inRange = !!(sel.start && sel.end) && d > sel.start && d < sel.end;
+            cell.classList.toggle("is-start", isStart);
+            cell.classList.toggle("is-end", isEnd);
+            cell.classList.toggle("is-inrange", inRange);
+            const base = cell.getAttribute("aria-label").replace(/, (check-in|check-out|in selected stay)$/, "");
+            cell.setAttribute("aria-label", base + (isStart ? ", check-in" : isEnd ? ", check-out" : inRange ? ", in selected stay" : ""));
+            if (cell.tagName === "BUTTON") { if (isStart || isEnd) cell.setAttribute("aria-pressed", "true"); else cell.removeAttribute("aria-pressed"); }
         });
+        const pill = $("mvModalDatesPill");
+        if (pill) pill.textContent = sel.start && sel.end ? `${fmtShort(sel.start)} → ${fmtShort(sel.end)}` : sel.start ? `Check-in ${fmtShort(sel.start)}` : "Dates not selected";
         summary.innerHTML = "";
         const text = document.createElement("span");
         const addBtn = (label, handler, cls = "mv-btn mv-btn--ghost", extra) => {
@@ -1792,7 +1804,7 @@
                     <div>
                         <span class="mv-pill">Sleeps ${p.sleeps}</span>
                         <span class="mv-pill">${esc(guests)} guests</span>
-                        <span class="mv-pill">${esc(fmtDate(checkin))} → ${esc(fmtDate(checkout))}</span>
+                        <span class="mv-pill" id="mvModalDatesPill">${isHostaway ? "Dates not selected" : `${esc(fmtDate(checkin))} → ${esc(fmtDate(checkout))}`}</span>
                     </div>
 
                     <div style="margin-top:10px; font-size:13px; opacity:.8;">
