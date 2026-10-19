@@ -3,6 +3,8 @@
     { "source": "/", "destination": "/consumer/booking-test.html" },
     { "source": "/consumer", "destination": "/consumer/booking-test.html" },
     { "source": "/consumer/", "destination": "/consumer/booking-test.html" },
+    { "source": "/property/:id", "destination": "/consumer/booking-test.html" },
+    { "source": "/property/:id/", "destination": "/consumer/booking-test.html" },
     { "source": "/admin", "destination": "/admin/admin-holds.html" },
     { "source": "/admin/", "destination": "/admin/admin-holds.html" }
   ]

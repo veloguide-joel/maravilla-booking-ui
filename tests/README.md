@@ -27,6 +27,7 @@ Node ≥ 20. No network is needed: every proxy call is intercepted and answered 
 | `browser/n2-modal-calendar.mjs` | 85 | modal navigation, fresh windows, fail-closed, edit/clear, carry-over, Dec 24–31 reservation, highlighting, stale protection |
 | `browser/d4-savings-display.mjs` | 58 | six pilot prices, LOS stacking, malformed `direct`, no savings on unavailable/unconfirmed, stale protection, mobile |
 | `browser/u5b-search-regression.mjs` | 48 | U1–U6 search flow, favorites, cards, unconfirmed states |
+| `browser/ux1-property-routes.mjs` | 48 | `/property/:id` direct load/refresh, unknown ids, strict query params, Back to results, Back/Forward, state preservation, modal untouched, stale listings, mobile/keyboard |
 
 Unit tests import the real functions: `lib/page-source.mjs` extracts named declarations from the page's
 inline script at test time (`extract([...names])`); a renamed or removed function fails the suite instead of

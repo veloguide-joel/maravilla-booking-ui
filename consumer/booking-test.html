@@ -60,6 +60,9 @@
     <div id="mvResults" class="mv-grid"></div>
 </div>
 
+<!-- UX1: dedicated property view (same document; shown instead of #mv-app on /property/:id). Non-bookable at this stage. -->
+<div id="mvPropertyView" class="mv-prop mv-view-hidden" aria-live="polite"></div>
+
 <div id="mvModal" class="mv-modal" aria-hidden="true">
     <div class="mv-modal__backdrop" data-close="1"></div>
     <div class="mv-modal__panel" role="dialog" aria-modal="true" aria-label="Property details">
@@ -593,6 +596,23 @@
     /* N2: a check-out day whose night is blocked keeps the blocked look and only gains the check-out outline (departure-exclusive) */
     .mv-cal__day--hostaway.is-blocked.is-end{ border: 2px solid #ff385c; }
     .mv-modal{ overflow: auto; } /* tall modal content (calendar) scrolls instead of being clipped */
+    /* UX1: property view (presentation only; booking controls arrive in UX3/UX4) */
+    .mv-view-hidden{ display: none !important; }
+    .mv-prop{ font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; max-width: 1120px; margin: 0 auto; padding: 10px 12px 40px; }
+    .mv-prop__back{ display: inline-block; margin: 6px 0 14px; font-size: 14px; color: #222; text-decoration: none; border-bottom: 1px solid #ccc; }
+    .mv-prop__back:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
+    .mv-prop__title{ margin: 0 0 4px; font-size: 26px; font-weight: 800; line-height: 1.2; }
+    .mv-prop__title:focus{ outline: none; }
+    .mv-prop__where{ font-size: 15px; opacity: .8; margin-bottom: 14px; }
+    .mv-prop__hero{ width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 18px; background: #f2f2f2; display: block; }
+    .mv-prop__hero.mv-card__noimg{ height: auto; }
+    .mv-prop__facts{ display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 12px; }
+    .mv-prop__summary{ font-size: 15px; line-height: 1.5; margin: 0 0 16px; max-width: 70ch; }
+    .mv-prop__note{ font-size: 13px; opacity: .8; border: 1px solid #eee; border-radius: 12px; padding: 10px 12px; max-width: 70ch; }
+    .mv-prop__request{ font-size: 13px; opacity: .85; margin: 0 0 10px; }
+    .mv-prop__empty{ padding: 24px 0; }
+    .mv-prop__empty h1{ font-size: 22px; margin: 0 0 6px; }
+    @media(max-width: 760px){ .mv-prop__title{ font-size: 22px; } .mv-prop__hero{ aspect-ratio: 4 / 3; border-radius: 14px; } }
     @media(max-width: 760px){
         .mv-calendar__months{ grid-template-columns: 1fr; }
         .mv-calendar__panel{ margin: 6vh 12px; }
@@ -727,7 +747,11 @@
             summary: typeof l.summary === "string" ? l.summary : "",
             img: httpsUrl(l.img),
             currency: typeof l.currency === "string" ? l.currency : null,
-            url: httpsUrl(l.url)
+            url: httpsUrl(l.url),
+            // UX1: facts the public feed already sends (F1 whitelist); null when absent, never guessed
+            bedrooms: Number.isInteger(l.bedrooms) && l.bedrooms >= 0 ? l.bedrooms : null,
+            bathrooms: typeof l.bathrooms === "number" && Number.isFinite(l.bathrooms) && l.bathrooms >= 0 ? l.bathrooms : null,
+            city: typeof l.city === "string" && l.city.trim() ? l.city.trim() : null
         };
     }
 
@@ -1457,12 +1481,16 @@
         }
     }
 
+    let listingsSettled = false; // UX1: the property view shows "Loading property…" until the feed has answered
     async function loadListings() {
+        listingsSettled = false;
         PROPERTIES = [];
         currentList = PROPERTIES;
         if (!API_BASE) {
             renderWithFilters();
             showInventoryMessage(UI_TEXT.noBackend);
+            listingsSettled = true;
+            renderRoute();
             return;
         }
         showInventoryMessage(UI_TEXT.loading);
@@ -1479,10 +1507,14 @@
             renderWithFilters();
             updateSavedCount(false);
             if (!PROPERTIES.length) showInventoryMessage(UI_TEXT.loadFailed, { retry: true });
+            listingsSettled = true;
+            renderRoute();
         } catch (err) {
             renderWithFilters();
             showInventoryMessage(UI_TEXT.loadFailed, { retry: true });
             console.error("Failed to load listings:", err);
+            listingsSettled = true;
+            renderRoute();
         }
     }
 
@@ -2021,12 +2053,152 @@
         if (e.key === "Escape") closeModal();
     });
 
+    // ---- UX1: dedicated property URLs (/property/:id) — one document, view switch ----
+    // The search page (#mv-app) and the property view (#mvPropertyView) are siblings; exactly one is
+    // shown. The property view is PRESENTATION ONLY in UX1: it contains none of the booking ids
+    // (mvHostaway*, mvGuests, mvCheckin…), so the N1/N2/D4 code keeps its single active instance in
+    // the search page/modal. Wiring booking controls into this view is UX3/UX4 and must reuse those
+    // instances rather than duplicate them. Nothing here calls the API: the property is looked up in
+    // PROPERTIES (the sanitized listings feed); unknown ids render "not found" with no request.
+    const PROPERTY_ROUTE = /^\/property\/([1-9]\d{0,11})(?:-[a-z0-9-]{1,80})?\/?$/; // canonical numeric id (no leading zeros), optional readable suffix
+    const PROPERTY_PREFIX = /^\/property(?:\/|$)/;
+    const ROUTE_TEXT = {
+        loading: "Loading property…",
+        notFound: "Property not found",
+        notFoundHelp: "This property is not part of our current listings.",
+        back: "← Back to results",
+        bookingSoon: "Online booking for this property opens soon. Availability and prices for your dates can be checked from the search page."
+    };
+    const $propertyView = $("mvPropertyView");
+    const $app = document.getElementById("mv-app");
+    const baseTitle = document.title;
+    let routeView = "search"; // "search" | "property"
+    let routeSeq = 0;         // bumps on every route change; async renders check it (no stale view updates)
+    let focusTitlePending = false; // move focus to the property title once real content (or "not found") is rendered
+
+    /** null = not a property route; a number = requested id; NaN = malformed /property/... path (rendered as "not found"). */
+    function parsePropertyRoute(pathname) {
+        const m = PROPERTY_ROUTE.exec(pathname);
+        if (m) return Number(m[1]);
+        return PROPERTY_PREFIX.test(pathname) ? NaN : null;
+    }
+    /** Strict query validation: a parameter is applied only when fully valid; anything else is ignored and flagged. */
+    function parseRouteQuery(search) {
+        const q = new URLSearchParams(search);
+        const ci = q.get("checkin"), co = q.get("checkout"), g = q.get("guests");
+        const out = { checkin: null, checkout: null, guests: null, invalid: false };
+        const today = todayISO();
+        if (ci !== null || co !== null) {
+            const okDates = isIsoDate(ci) && isIsoDate(co) && ci >= today && co > ci
+                && nightsSpan(ci, co) <= CALENDAR_POLICY.maxStayNights
+                && nightsSpan(today, co) <= CALENDAR_POLICY.maxAdvanceDays + 1;
+            if (okDates) { out.checkin = ci; out.checkout = co; } else out.invalid = true;
+        }
+        if (g !== null) {
+            const allowed = new Set([...$("mvGuests").options].map((o) => o.value));
+            if (/^\d{1,2}$/.test(g) && allowed.has(String(Number(g)))) out.guests = Number(g); else out.invalid = true;
+        }
+        // All-or-nothing: one bad parameter means none of them is applied (no half-initialised state).
+        if (out.invalid) return { checkin: null, checkout: null, guests: null, invalid: true };
+        return out;
+    }
+    /** Valid URL parameters initialise the shared search inputs (so returning to results keeps them). */
+    function applyRouteQuery(rq) {
+        if (rq.guests !== null) $("mvGuests").value = String(rq.guests);
+        if (rq.checkin && rq.checkout) { $checkinInput.value = rq.checkin; $checkoutInput.value = rq.checkout; }
+        if (rq.guests !== null || rq.checkin) { ensureCheckoutAfterCheckin(); updateDatesDisplay(); updateSearchBtnState(); runSearch(); }
+    }
+    function searchQueryString() {
+        const q = new URLSearchParams();
+        if ($checkinInput.value && $checkoutInput.value) { q.set("checkin", $checkinInput.value); q.set("checkout", $checkoutInput.value); }
+        q.set("guests", $("mvGuests").value);
+        return `?${q}`;
+    }
+    const factPill = (text) => { const el = document.createElement("span"); el.className = "mv-pill"; el.textContent = text; return el; };
+    function renderPropertyView(id) {
+        $propertyView.innerHTML = "";
+        const back = document.createElement("a");
+        back.href = "/" + searchQueryString(); back.className = "mv-prop__back"; back.textContent = ROUTE_TEXT.back; back.id = "mvPropBack";
+        back.addEventListener("click", (e) => { e.preventDefault(); goBackToResults(); });
+        $propertyView.appendChild(back);
+        const h1 = document.createElement("h1"); h1.className = "mv-prop__title"; h1.id = "mvPropTitle"; h1.tabIndex = -1;
+        const p = Number.isInteger(id) ? PROPERTIES.find((x) => Number(x.id) === id) : null; // malformed path (NaN) -> not found
+        if (!p) {
+            const box = document.createElement("div"); box.className = "mv-prop__empty";
+            const pending = !listingsSettled;
+            h1.textContent = pending ? ROUTE_TEXT.loading : ROUTE_TEXT.notFound;
+            box.appendChild(h1);
+            if (!pending) { const help = document.createElement("p"); help.textContent = !API_BASE ? UI_TEXT.noBackend : (PROPERTIES.length ? ROUTE_TEXT.notFoundHelp : UI_TEXT.loadFailed); box.appendChild(help); }
+            $propertyView.appendChild(box);
+            document.title = `${pending ? ROUTE_TEXT.loading : ROUTE_TEXT.notFound} · ${baseTitle}`;
+            if (!pending && focusTitlePending) { focusTitlePending = false; h1.focus(); }
+            return;
+        }
+        h1.textContent = p.name; $propertyView.appendChild(h1);
+        const where = document.createElement("div"); where.className = "mv-prop__where";
+        where.textContent = [p.city, "Nayarit, Mexico"].filter(Boolean).join(", ");
+        $propertyView.appendChild(where);
+        if (p.img) {
+            const img = document.createElement("img"); img.className = "mv-prop__hero"; img.src = p.img; img.alt = p.name; img.loading = "eager";
+            img.addEventListener("error", () => { img.style.opacity = "0.7"; img.style.filter = "grayscale(1)"; }, { once: true });
+            $propertyView.appendChild(img);
+        } else {
+            const ph = document.createElement("div"); ph.className = "mv-prop__hero mv-card__noimg"; ph.setAttribute("role", "img"); ph.setAttribute("aria-label", "No photo available"); $propertyView.appendChild(ph);
+        }
+        const facts = document.createElement("div"); facts.className = "mv-prop__facts"; facts.id = "mvPropFacts";
+        facts.appendChild(factPill(`Sleeps ${p.sleeps}`));
+        if (p.bedrooms !== null) facts.appendChild(factPill(p.bedrooms === 0 ? "Studio" : `${p.bedrooms} bedroom${p.bedrooms === 1 ? "" : "s"}`));
+        if (p.bathrooms !== null) facts.appendChild(factPill(`${p.bathrooms} bath${p.bathrooms === 1 ? "" : "s"}`));
+        $propertyView.appendChild(facts);
+        if (p.summary) { const sum = document.createElement("p"); sum.className = "mv-prop__summary"; sum.textContent = p.summary; $propertyView.appendChild(sum); }
+        const ci = $checkinInput.value, co = $checkoutInput.value;
+        if (ci && co) { const rq = document.createElement("p"); rq.className = "mv-prop__request"; rq.id = "mvPropRequest"; rq.textContent = `Requested: ${fmtShort(ci)} → ${fmtShort(co)} · ${$("mvGuests").value} guest${$("mvGuests").value === "1" ? "" : "s"} (not yet checked for this property)`; $propertyView.appendChild(rq); }
+        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = ROUTE_TEXT.bookingSoon; $propertyView.appendChild(note);
+        document.title = `${p.name} · ${baseTitle}`;
+        if (focusTitlePending) { focusTitlePending = false; h1.focus(); }
+    }
+    function showView(view) {
+        routeView = view;
+        $app.classList.toggle("mv-view-hidden", view === "property");
+        $propertyView.classList.toggle("mv-view-hidden", view !== "property");
+        if (view !== "property") document.title = baseTitle;
+    }
+    /** Render whatever the current location asks for. Safe to call repeatedly (boot, listings loaded, popstate). */
+    function renderRoute() {
+        const id = parsePropertyRoute(window.location.pathname);
+        if (id === null) { if (routeView !== "search") showView("search"); return; }
+        if ($modal.getAttribute("aria-hidden") === "false") closeModal(); // the modal belongs to the search view
+        showView("property");
+        renderPropertyView(id);
+    }
+    let routeQueryApplied = false;
+    function applyRouteFromLocation({ focusTitle = false } = {}) {
+        routeSeq += 1;
+        const id = parsePropertyRoute(window.location.pathname);
+        if (id !== null && !routeQueryApplied) { routeQueryApplied = true; applyRouteQuery(parseRouteQuery(window.location.search)); }
+        focusTitlePending = focusTitle && id !== null;
+        renderRoute();
+    }
+    function goBackToResults() {
+        const st = window.history.state;
+        if (st && st.mvFrom === "search") { window.history.back(); return; } // came from results in this document: restore it
+        window.history.pushState({ mvView: "search" }, "", "/" + searchQueryString());
+        applyRouteFromLocation();
+        window.scrollTo(0, 0);
+    }
+    window.addEventListener("popstate", (event) => {
+        applyRouteFromLocation({ focusTitle: true });
+        const st = event.state;
+        if (routeView === "search" && st && typeof st.mvScrollY === "number") window.scrollTo(0, st.mvScrollY);
+    });
+
     $("mvGuests").value = String(CONFIG.defaultGuests);
     setMinDates();
     ensureCheckoutAfterCheckin();
     currentList = PROPERTIES;
     renderWithFilters();
     updateSavedCount(false);
+    applyRouteFromLocation({ focusTitle: true }); // UX1: honour a direct /property/:id load (listings arrive asynchronously; renderRoute re-runs then)
 })();
 </script>
 
