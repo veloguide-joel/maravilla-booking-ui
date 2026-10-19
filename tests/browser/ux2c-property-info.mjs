@@ -73,8 +73,8 @@ async function make({ vp = { width: 1280, height: 900 }, body = PILOTS } = {}) {
       sections: [...pv.querySelectorAll("section.mv-prop__section")].map((s) => [s.id, s.getAttribute("aria-labelledby"), s.querySelector("h2")?.textContent]),
       headings: [...pv.querySelectorAll("h1,h2,h3")].map((h) => h.tagName + ":" + h.textContent),
       text: pv.innerText,
-      aside: { present: !!document.getElementById("mvPropAside"), rect: r(document.getElementById("mvPropAside")), text: document.getElementById("mvPropAside")?.innerText || "", note: !!document.querySelector("#mvPropAside .mv-prop__note"), request: document.querySelector("#mvPropAside #mvPropRequest")?.textContent || null },
-      main: r(document.getElementById("mvPropMain")), gallery: r(document.getElementById("mvPropGallery")), view: r(pv),
+      aside: { present: !!document.getElementById("mvPropAside"), rect: r(document.getElementById("mvPropAside")), text: document.getElementById("mvPropAside")?.innerText || "", note: !!document.querySelector("#mvPropAside .mv-prop__note"), request: (() => { const a = document.querySelector("#mvPropAside #mvPanelCheckin")?.textContent; return a && a !== "Not selected" ? `${a} → ${document.getElementById("mvPanelCheckout").textContent}` : null; })() }, // UX3: panel fields replaced the request line
+      main: r(document.getElementById("mvPropMain")), mainText: document.getElementById("mvPropMain")?.innerText || "", gallery: r(document.getElementById("mvPropGallery")), view: r(pv),
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       bookingIdsInView: ["mvHostawayCalendar", "mvHostawayQuote", "mvHostawayQuoteBtn", "mvHostawaySelection", "mvGuests", "mvCheckin", "mvCheckout"].filter((id) => pv.querySelector("#" + id)).length,
       controls: [...pv.querySelectorAll("button,a,input,select")].map((b) => b.textContent.trim() || b.getAttribute("aria-label") || b.tagName),
@@ -129,7 +129,7 @@ const cases = [
   ["4 amenities only 'Beach'", { amenities: ["Beach", "BEACH"] }, (s) => !s.amenSection],
   ["4 amenities mixed: valid kept in order, duplicates and junk dropped, no HTML injected", { amenities: ["TV", "<img src=x onerror=alert(1)>", "tv", "  Kitchen  ", 7, "Air\nconditioning"] }, (s) => same(s.amen, ["TV", "Kitchen", "Air conditioning"]) && s.toggle === null],
   ["4 exactly 7 amenities: all shown on desktop, no toggle there", { amenities: ["TV", "Kitchen", "Dryer", "Hangers", "Essentials", "Hot water", "Refrigerator"] }, (s) => s.amen.length === 7 && s.amenVisible === 7 && s.toggle && !s.toggle.visible],
-  ["5 check-in and check-out both missing: no section", { checkInFrom: null, checkOutBy: undefined }, (s) => s.practical === null && !/check-in|check-out/i.test(s.text)],
+  ["5 check-in and check-out both missing: no section", { checkInFrom: null, checkOutBy: undefined }, (s) => s.practical === null && !/check-in|check-out/i.test(s.mainText)],
   ["5 malformed times ('3pm', '25:00') are not shown", { checkInFrom: "3pm", checkOutBy: "25:00" }, (s) => s.practical === null],
   ["5 only check-out supplied", { checkInFrom: null, checkOutBy: "11:00" }, (s) => same(s.practical, [["Check-out", "By 11:00 AM"]])],
   ["2 beds missing / 0 / malformed: no bed pill", { beds: 0 }, (s) => same(s.facts, ["Sleeps 2", "1 bedroom", "1 bath"])],
@@ -152,7 +152,7 @@ await T.done();
 // ===== 9. Responsive: 390 and 320 =====
 for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 640 }]) {
   T = await make({ vp }); await T.go("/property/603564"); s = await T.info();
-  ok(`9 ${vp.width}px: single column — aside below the main column, nothing beside it; no horizontal overflow`, !s.overflow && s.aside.rect.y >= s.main.b && s.aside.rect.x === s.main.x && s.main.r <= vp.width && s.aside.rect.r <= vp.width, { m: s.main, a: s.aside.rect, o: s.overflow });
+  ok(`9 ${vp.width}px: single column — reserved column stacked (UX3: compact panel above the content), nothing beside it; no horizontal overflow`, !s.overflow && s.aside.rect.b <= s.main.y && s.aside.rect.x === s.main.x && s.main.r <= vp.width && s.aside.rect.r <= vp.width, { m: s.main, a: s.aside.rect, o: s.overflow });
   ok(`9 ${vp.width}px: amenities one per row, 6 visible + 'Show all 20 amenities'`, s.amenVisible === 6 && s.toggle.visible && s.toggle.text === "Show all 20 amenities", { v: s.amenVisible, t: s.toggle });
   const rows = await T.page.evaluate(() => [...document.querySelectorAll("#mvPropAmenitiesList .mv-amen__item")].filter((li) => getComputedStyle(li).display !== "none").map((li) => Math.round(li.getBoundingClientRect().left)));
   ok(`9 ${vp.width}px: amenity items share one left edge (one column)`, new Set(rows).size === 1, rows);
@@ -166,13 +166,13 @@ T = await make({ vp: { width: 390, height: 844 }, body: variant({ amenities: ["T
 ok("9 390px with 7 amenities: 6 visible and the toggle appears on phones only", s.amenVisible === 6 && s.toggle.visible && s.toggle.text === "Show all 7 amenities", s);
 await T.done();
 T = await make({ vp: { width: 900, height: 900 } }); await T.go("/property/603564"); s = await T.info();
-ok("9 900px (tablet): single column, no overflow", !s.overflow && s.aside.rect.y >= s.main.b, { m: s.main, a: s.aside.rect });
+ok("9 900px (tablet): single column, no overflow", !s.overflow && s.aside.rect.b <= s.main.y, { m: s.main, a: s.aside.rect });
 await T.done();
 
 // ===== 10. Keyboard and accessibility =====
 T = await make(); await T.go("/property/603564");
 const order = []; for (let i = 0; i < 4; i++) { await T.page.keyboard.press("Tab"); order.push(await T.page.evaluate(() => document.activeElement.id || document.activeElement.className)); }
-ok("10 Tab order from the title: Show all photos, then Show all amenities (amenities are not tab stops)", order[0] === "mvPropGalleryAll" && order[1] === "mvPropAmenitiesToggle", order);
+ok("10 Tab order from the title: Show all photos, the UX3 panel link, then Show all amenities (amenities are not tab stops)", order[0] === "mvPropGalleryAll" && order[1] === "mvPanelChange" && order[2] === "mvPropAmenitiesToggle", order);
 await T.page.focus("#mvPropAmenitiesToggle"); await T.page.keyboard.press("Enter"); s = await T.info();
 ok("10 Enter toggles the amenity list (aria-expanded true)", s.toggle.expanded === "true" && s.amenVisible === 20, s.toggle);
 await T.page.keyboard.press("Space"); s = await T.info();
@@ -185,7 +185,7 @@ await T.done();
 
 // ===== 12. Direct URLs, refresh, Back/Forward =====
 T = await make(); await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2"); s = await T.info();
-ok("12 direct URL with search params: info area renders; request line sits in the reserved column", s.amen.length === 16 && /Dec 20 → Dec 24/.test(s.aside.request || ""), s.aside);
+ok("12 direct URL with search params: info area renders; the dates sit in the reserved column (UX3 panel)", s.amen.length === 16 && s.aside.request === "Dec 20, 2026 → Dec 24, 2026", s.aside);
 await T.page.reload(); await T.page.waitForSelector("#mvPropAmenities"); s = await T.info();
 ok("12 refresh: same information", s.h1 === NAME_566 && s.amen.length === 16 && same(s.practical, [["Check-in", "From 3:00 PM"]]), s);
 await T.page.click("#mvPropAmenitiesToggle");
@@ -218,8 +218,10 @@ await T.page.keyboard.press("Escape");
 const pagesApi = T.api.slice();
 T.api.length = 0;
 await T.page.evaluate(() => { history.pushState({ mvFrom: "search" }, "", "/property/603564"); window.dispatchEvent(new PopStateEvent("popstate", { state: { mvFrom: "search" } })); }); await T.page.waitForSelector("#mvPropAmenities");
+await T.page.waitForFunction(() => document.getElementById("mvPanel")?.dataset.state && document.getElementById("mvPanel").dataset.state !== "loading");
+const panelCalls = T.api.slice(); T.api.length = 0;
 await T.page.click("#mvPropAmenitiesToggle");
-ok("14 property page + amenity toggle make no API calls", T.api.length === 0, T.api);
+ok("14 property page: only the UX3 panel's stay check (+ quote if clear) for this property and stay; the amenity toggle makes no API calls", panelCalls.length >= 1 && panelCalls.length <= 2 && panelCalls.every((a) => /id=603564&from=2026-12-24&to=2026-12-31/.test(a)) && T.api.length === 0, { panelCalls, after: T.api });
 ok("14 network: only proxy listings/calendar/quote; nothing else contacted", T.other.length === 0 && pagesApi.every((a) => /^\/api\/booking\/(listings|calendar|quote)(\?|$)/.test(a)), { other: T.other, api: pagesApi });
 s = await T.info();
 ok("14 no sensitive internals on the page (no raw keys, ids of other systems, 'null'/'undefined', JSON)", !/\{"|minNights|maxNights|checkInFrom|checkOutBy|listingId|hostaway-|undefined|\bnull\b/i.test(s.text), s.text.match(/\{"|minNights|maxNights|checkInFrom|checkOutBy|listingId|hostaway-|undefined|\bnull\b/i));

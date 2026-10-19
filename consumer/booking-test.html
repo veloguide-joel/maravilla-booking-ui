@@ -635,9 +635,9 @@
     @media(max-width: 760px){ .mv-prop__title{ font-size: 22px; } .mv-prop__hero{ aspect-ratio: 4 / 3; border-radius: 14px; } }
     /* UX2c: property information area. Desktop: main column + reserved right column (future UX3 booking panel). */
     .mv-prop__body{ display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 56px; align-items: start; margin-top: 20px; }
-    .mv-prop__main{ min-width: 0; }
+    .mv-prop__main{ min-width: 0; grid-column: 1; grid-row: 1; }
     .mv-prop__main .mv-prop__facts{ margin: 0 0 14px; }
-    .mv-prop__aside{ position: sticky; top: 20px; }
+    .mv-prop__aside{ position: sticky; top: 20px; grid-column: 2; grid-row: 1; }
     .mv-prop__card{ border: 1px solid #e6e6e6; border-radius: 16px; padding: 18px; box-shadow: 0 4px 18px rgba(0,0,0,.06); background: #fff; }
     .mv-prop__card .mv-prop__note{ border: 0; padding: 0; max-width: none; font-size: 14px; line-height: 1.45; opacity: .85; }
     .mv-prop__card .mv-prop__request{ margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
@@ -668,6 +668,48 @@
         .mv-amen.is-collapsed .mv-amen__item:nth-child(n+7){ display: none; }
         .mv-amen.fits-desktop + .mv-amen__toggle{ display: inline-block; }
         .mv-prop__card{ box-shadow: none; padding: 14px; }
+    }
+    /* UX3: compact booking panel (in the reserved aside). Display only — no reserve/checkout controls. */
+    .mv-panel__head{ font-size: 18px; font-weight: 750; line-height: 1.3; }
+    .mv-panel__head--loading, .mv-panel__head--empty{ font-size: 17px; font-weight: 650; }
+    .mv-panel__head--unavailable, .mv-panel__head--unconfirmed{ color: #9a3412; }
+    .mv-panel__top{ display: grid; grid-template-columns: 1fr auto; align-items: end; column-gap: 8px; }
+    .mv-panel__was{ grid-column: 1 / -1; font-size: 14px; color: #6b6b6b; text-decoration: line-through; }
+    .mv-panel__price{ font-size: 26px; font-weight: 800; line-height: 1.15; }
+    .mv-panel__badge{ font-size: 13px; font-weight: 700; color: #15803d; background: #ecfdf3; border-radius: 999px; padding: 3px 9px; white-space: nowrap; align-self: center; }
+    .mv-panel__sub{ font-size: 14px; color: #555; margin-top: 2px; }
+    .mv-panel__status{ font-size: 13px; color: #555; margin-top: 8px; line-height: 1.4; }
+    .mv-panel__status--ok{ color: #166534; }
+    .mv-panel__retry{ margin-left: 4px; padding: 4px 10px; font-size: 13px; }
+    .mv-panel__fields{ display: grid; grid-template-columns: 1fr 1fr; margin: 16px 0 0; border: 1px solid #cfcfcf; border-radius: 12px; overflow: hidden; }
+    .mv-panel__field{ padding: 9px 12px; min-width: 0; }
+    .mv-panel__field--out{ border-left: 1px solid #cfcfcf; }
+    .mv-panel__field--guests{ grid-column: 1 / -1; border-top: 1px solid #cfcfcf; }
+    .mv-panel__field dt{ font-size: 10.5px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: #333; }
+    .mv-panel__field dd{ margin: 2px 0 0; font-size: 15px; overflow-wrap: anywhere; }
+    .mv-panel__rows{ margin: 16px 0 0; padding-top: 12px; border-top: 1px solid #eee; display: grid; gap: 8px; }
+    .mv-panel__row{ display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+    .mv-panel__row dd{ margin: 0; white-space: nowrap; }
+    .mv-panel__row--line{ color: #555; font-size: 13px; }
+    .mv-panel__row--save{ color: #15803d; }
+    .mv-panel__row--total{ font-weight: 750; font-size: 15px; padding-top: 6px; border-top: 1px solid #eee; }
+    .mv-panel__disclaimer{ font-size: 12.5px; color: #666; margin-top: 8px; line-height: 1.4; }
+    .mv-panel__change{ display: inline-block; margin-top: 14px; font-size: 14px; color: #222; text-decoration: underline; text-underline-offset: 2px; }
+    .mv-panel__change:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
+    .mv-panel .mv-prop__note{ margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee; font-size: 13px; }
+    @media(max-width: 900px){
+        .mv-prop__main, .mv-prop__aside{ grid-column: 1; grid-row: auto; }
+        .mv-prop__aside{ margin-top: 4px; margin-bottom: 8px; } /* compact summary right under the photos, not sticky */
+    }
+    @media(max-width: 760px){
+        .mv-panel__price{ font-size: 23px; }
+        .mv-panel__fields{ margin-top: 12px; }
+        .mv-panel__field{ padding: 7px 10px; }
+        .mv-panel__rows{ margin-top: 12px; padding-top: 10px; gap: 6px; }
+        .mv-panel__row--total{ display: none; } /* phones: the headline already states the estimated direct total */
+        .mv-panel__statusbox .mv-panel__status{ margin-top: 6px; }
+        .mv-panel__change{ margin-top: 10px; }
+        .mv-panel .mv-prop__note{ margin-top: 8px; padding-top: 8px; }
     }
     /* UX2b: property photo gallery — desktop mosaic (one large + up to four), mobile swipe carousel.
        One set of tiles serves both layouts; tiles 6+ are display:none on desktop (so their lazy images never load there). */
@@ -2223,8 +2265,7 @@
         loading: "Loading property…",
         notFound: "Property not found",
         notFoundHelp: "This property is not part of our current listings.",
-        back: "← Back to results",
-        bookingSoon: "Online booking for this property opens soon. Availability and prices for your dates can be checked from the search page."
+        back: "← Back to results"
     };
     const $propertyView = $("mvPropertyView");
     const $app = document.getElementById("mv-app");
@@ -2530,7 +2571,7 @@
         const body = document.createElement("div"); body.className = "mv-prop__body";
         const main = document.createElement("div"); main.className = "mv-prop__main"; main.id = "mvPropMain";
         const aside = document.createElement("aside"); aside.className = "mv-prop__aside"; aside.id = "mvPropAside"; aside.setAttribute("aria-label", "Booking information");
-        body.append(main, aside);
+        body.append(aside, main); // UX3: panel first in reading order (it is shown first on phones); desktop places it in the right column
         $propertyView.appendChild(body);
         const facts = document.createElement("div"); facts.className = "mv-prop__facts"; facts.id = "mvPropFacts";
         facts.appendChild(factPill(`Sleeps ${p.sleeps}`));
@@ -2544,13 +2585,124 @@
         if (p.amenities.length) main.appendChild(buildAmenities(p));
         const practical = buildPractical(p);
         if (practical) main.appendChild(practical);
-        const card = document.createElement("div"); card.className = "mv-prop__card";
-        const ci = $checkinInput.value, co = $checkoutInput.value;
-        if (ci && co) { const rq = document.createElement("p"); rq.className = "mv-prop__request"; rq.id = "mvPropRequest"; rq.textContent = `Requested: ${fmtShort(ci)} → ${fmtShort(co)} · ${$("mvGuests").value} guest${$("mvGuests").value === "1" ? "" : "s"} (not yet checked for this property)`; card.appendChild(rq); }
-        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = ROUTE_TEXT.bookingSoon; card.appendChild(note);
-        aside.appendChild(card);
+        aside.appendChild(buildBookingPanel(p)); // UX3 (replaces the UX1/UX2c request line + "opens soon" card)
         document.title = `${p.name} · ${baseTitle}`;
         if (focusTitlePending) { focusTitlePending = false; h1.focus(); }
+    }
+    // ---- UX3: compact booking panel on the property page (display + validation only; no checkout) ----
+    // Reuses the validated booking engine exactly as the modal does, in the same order:
+    //   seedSelectionFromSearch()  -> the modal's carry-over validation of the shared search dates
+    //   fetchCalendarWindow() + evaluateStaySelection()  -> fresh stay-window occupancy check (fail closed)
+    //   fetchQuote()  -> parseQuoteResponse() + parseDirectEstimate() (server bookability, capacity, D4 consistency)
+    // It has its OWN state (panelSeq token) and its OWN ids (mvPanel*). It never reads or writes the modal's
+    // selectionByListing / calendarByListing / quoteByListing / window.mvSelectedApartmentId, so the search modal
+    // keeps its single active booking state. Every async step checks the token, the route and that its DOM is still
+    // attached, so a late answer can never update another property or view. Nothing here computes a price.
+    let panelSeq = 0;
+    const PANEL_TEXT = {
+        selectDates: "Select dates to see price",
+        checking: "Checking availability and price…",
+        unavailable: "Not available for these dates",
+        unconfirmed: "Availability could not be confirmed",
+        priceUnconfirmed: "Price could not be confirmed",
+        change: "Change dates or guests",
+        choose: "Choose dates on the search page",
+        soon: "Online booking for this property opens soon."
+    };
+    const fmtLongDate = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(y, m - 1, d)); };
+    const panelLive = () => routeView === "property";
+    function buildBookingPanel(p) {
+        const seq = ++panelSeq;
+        const card = document.createElement("div"); card.className = "mv-prop__card mv-panel"; card.id = "mvPanel";
+        const live = document.createElement("div"); live.className = "mv-panel__live"; live.id = "mvPanelLive"; live.setAttribute("aria-live", "polite");
+        const statusBox = document.createElement("div"); statusBox.className = "mv-panel__statusbox"; statusBox.id = "mvPanelStatus"; statusBox.setAttribute("aria-live", "polite");
+        const fields = document.createElement("dl"); fields.className = "mv-panel__fields";
+        const field = (id, label, value, cls) => { const box = document.createElement("div"); box.className = `mv-panel__field ${cls || ""}`.trim(); const dt = document.createElement("dt"); dt.textContent = label; const dd = document.createElement("dd"); dd.id = id; dd.textContent = value; box.append(dt, dd); fields.appendChild(box); return dd; };
+        const seed = seedSelectionFromSearch(); // same validation the modal applies to carried-over search dates
+        const guests = currentGuests();
+        const hasDates = seed.ok;
+        field("mvPanelCheckin", "Check-in", hasDates ? fmtLongDate(seed.start) : "Not selected", "mv-panel__field--in");
+        field("mvPanelCheckout", "Checkout", hasDates ? fmtLongDate(seed.end) : "Not selected", "mv-panel__field--out");
+        field("mvPanelGuests", "Guests", `${guests} guest${guests === 1 ? "" : "s"}`, "mv-panel__field--guests");
+        const extra = document.createElement("div"); extra.className = "mv-panel__extra";
+        const change = document.createElement("a"); change.className = "mv-panel__change"; change.id = "mvPanelChange";
+        change.href = "/" + searchQueryString(); change.textContent = hasDates ? PANEL_TEXT.change : PANEL_TEXT.choose;
+        change.addEventListener("click", (e) => { e.preventDefault(); goBackToResults(); });
+        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = PANEL_TEXT.soon;
+        card.append(live, fields, statusBox, extra, change, note);
+
+        const current = () => seq === panelSeq && panelLive() && card.isConnected;
+        const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+        const head = (text, cls) => { live.innerHTML = ""; statusBox.innerHTML = ""; extra.innerHTML = ""; card.dataset.state = cls; live.appendChild(el("div", `mv-panel__head mv-panel__head--${cls}`, text)); };
+        const retryButton = () => { const b = el("button", "mv-btn mv-btn--ghost mv-panel__retry", "Retry"); b.type = "button"; b.id = "mvPanelRetry"; b.addEventListener("click", () => { if (!current()) return; panelSeq += 1; card.replaceWith(buildBookingPanel(p)); }); return b; };
+
+        if (!hasDates) {
+            head(PANEL_TEXT.selectDates, "empty");
+            if (seed.invalid) statusBox.appendChild(el("div", "mv-panel__status", seed.message));
+            return card;
+        }
+        head(PANEL_TEXT.checking, "loading");
+        (async () => {
+            // 1) fresh occupancy check for exactly this stay (arrival-inclusive / departure-exclusive), fail closed
+            const cal = await fetchCalendarWindow(p.id, seed.start, seed.end);
+            if (!current()) return;
+            const v = evaluateStaySelection(seed.start, seed.end, cal, toISODate(new Date()));
+            if (!v.ok) {
+                if (v.reason === "NIGHT_UNAVAILABLE") {
+                    head(PANEL_TEXT.unavailable, "unavailable");
+                    statusBox.appendChild(el("div", "mv-panel__status", `${SELECTION_TEXT.NIGHT_UNAVAILABLE} (${fmtShort(v.night)}).`));
+                } else {
+                    head(PANEL_TEXT.unconfirmed, "unconfirmed");
+                    const s = el("div", "mv-panel__status", `${SELECTION_TEXT[v.reason] || "Some nights could not be confirmed."} `); s.appendChild(retryButton()); statusBox.appendChild(s);
+                }
+                return;
+            }
+            // 2) server quote: bookability, restrictions, capacity, price and the D4 estimate (validated by parseQuoteResponse)
+            const req = { id: Number(p.id), from: seed.start, to: seed.end, guests };
+            const r = await fetchQuote(req);
+            if (!current()) return;
+            if (r.state === "unavailable") {
+                head(PANEL_TEXT.unavailable, "unavailable");
+                r.reasons.forEach((x) => statusBox.appendChild(el("div", "mv-panel__status", x.message || x.code)));
+                return;
+            }
+            if (r.state !== "quoted") {
+                head(PANEL_TEXT.priceUnconfirmed, "unconfirmed");
+                const s = el("div", "mv-panel__status", "Please try again. "); s.appendChild(retryButton()); statusBox.appendChild(s);
+                return;
+            }
+            const nights = `${r.nights} night${r.nights === 1 ? "" : "s"}`;
+            const d = r.direct && r.direct.status === "estimated" ? r.direct : null;
+            live.innerHTML = ""; statusBox.innerHTML = ""; extra.innerHTML = ""; card.dataset.state = d ? "direct" : "quoted";
+            const top = el("div", "mv-panel__top");
+            if (d) {
+                const std = el("div", "mv-panel__was", fmtMoney(d.standardTotal, d.currency)); std.setAttribute("aria-label", `Standard price ${fmtMoney(d.standardTotal, d.currency)}`);
+                const price = el("div", "mv-panel__price", fmtMoney(d.estimatedTotal, d.currency)); price.id = "mvPanelPrice";
+                const badge = el("span", "mv-panel__badge", `Save ${directPctLabel(d.rateBps)}`);
+                top.append(std, price, badge);
+                live.append(top, el("div", "mv-panel__sub", `Estimated direct total · ${nights}`));
+            } else {
+                const price = el("div", "mv-panel__price", fmtMoney(r.total, r.currency)); price.id = "mvPanelPrice";
+                top.appendChild(price);
+                live.append(top, el("div", "mv-panel__sub", `Total · ${nights} · ${fmtMoney(r.nightlyAverage, r.currency)}/night`));
+            }
+            statusBox.appendChild(el("div", "mv-panel__status mv-panel__status--ok", `Available for these dates · checked ${r.checkedAt && !Number.isNaN(Date.parse(r.checkedAt)) ? new Date(r.checkedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "just now"}`));
+            // Breakdown (server lines), then the D4 figures exactly as the server sent them.
+            const rows = el("dl", "mv-panel__rows"); rows.id = "mvPanelRows";
+            const row = (k, val, cls) => { const w = el("div", `mv-panel__row ${cls || ""}`.trim()); w.append(el("dt", "", k), el("dd", "", val)); rows.appendChild(w); };
+            if (r.breakdown.length > 1) r.breakdown.forEach((b) => row(b.label, b.total < 0 ? `−${fmtMoney(-b.total, r.currency)}` : fmtMoney(b.total, r.currency), "mv-panel__row--line"));
+            if (d) {
+                row("Standard total", fmtMoney(d.standardTotal, d.currency), "mv-panel__row--std");
+                row(`Book Direct savings (${directPctLabel(d.rateBps)})`, `−${fmtMoney(d.discount, d.currency)}`, "mv-panel__row--save");
+                row("Estimated direct total", fmtMoney(d.estimatedTotal, d.currency), "mv-panel__row--total");
+            } else {
+                row("Total", fmtMoney(r.total, r.currency), "mv-panel__row--total");
+            }
+            extra.appendChild(rows);
+            const lead = d ? DIRECT_NOTE : (r.direct && r.direct.status === "estimate_unavailable" ? "A Book Direct savings estimate is not available for this stay; the standard price above applies." : "");
+            extra.appendChild(el("div", "mv-panel__disclaimer", [lead, r.note || "Quote only — no inventory is held."].filter(Boolean).join(" ")));
+        })();
+        return card;
     }
     function showView(view) {
         routeView = view;
@@ -2562,6 +2714,7 @@
     function renderRoute() {
         const id = parsePropertyRoute(window.location.pathname);
         closeGallery({ restoreFocus: false }); // UX2b: a route change / re-render replaces the gallery the viewer belongs to
+        panelSeq += 1; // UX3: any in-flight panel check belongs to the previous render and is discarded
         if (id === null) { if (routeView !== "search") showView("search"); return; }
         if ($modal.getAttribute("aria-hidden") === "false") closeModal(); // the modal belongs to the search view
         showView("property");

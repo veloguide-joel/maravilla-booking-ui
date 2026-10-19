@@ -245,7 +245,7 @@ await T.done();
 
 // ===== 11-12. Direct URL, refresh, Back/Forward =====
 T = await make(); await T.go("/property/603564?checkin=2026-12-20&checkout=2026-12-24&guests=2"); g = await T.gal();
-ok("11 direct URL with search params: gallery renders (12) with the request line intact", g.n === 12 && !!(await T.page.$("#mvPropRequest")), g.n);
+ok("11 direct URL with search params: gallery renders (12) with the booking panel showing the dates (UX3 replaced the request line)", g.n === 12 && (await T.page.evaluate(() => document.getElementById("mvPanelCheckin")?.textContent)) === "Dec 20, 2026", g.n);
 await T.page.click("#mvPropGalleryAll"); await T.page.reload(); await T.page.waitForSelector("#mvPropGallery"); await T.page.waitForTimeout(150); g = await T.gal();
 ok("11 refresh: gallery rebuilt, viewer closed, page not scroll-locked", g.n === 12 && !g.viewerOpen && !g.htmlLocked && !g.propInert, g);
 await T.page.click("#mvPropBack"); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden"));
