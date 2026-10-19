@@ -18,7 +18,7 @@ Node ≥ 20. No network is needed: every proxy call is intercepted and answered 
 | Suite | Checks | Covers |
 |---|---|---|
 | `unit/resolver.test.mjs` | 15 hosts | API host mapping incl. unknown-host fail-safe (B1) |
-| `unit/listing-mapping.test.mjs` | | `toProperty` whitelist / https-only images, UX2b gallery URL list (order, de-dup, cap 12, malformed dropped), `esc` |
+| `unit/listing-mapping.test.mjs` | | `toProperty` whitelist / https-only images, UX2b gallery URL list (order, de-dup, cap 12, malformed dropped), UX2c beds/amenities/check-in/out validation (held labels), `esc` |
 | `unit/calendar-parse.test.mjs` | 13 malformed + ranges | arrival-inclusive/departure-exclusive, isolation, incomplete coverage, fail-closed |
 | `unit/stay-selection.test.mjs` | 19 cases | owner's occupancy matrix, 90-night cap, unknown nights |
 | `unit/quote-parse.test.mjs` | 25 malformed + live shapes | three quote states, breakdown sum, MXN formatting |
@@ -29,6 +29,7 @@ Node ≥ 20. No network is needed: every proxy call is intercepted and answered 
 | `browser/u5b-search-regression.mjs` | 48 | U1–U6 search flow, favorites, cards, unconfirmed states |
 | `browser/ux1-property-routes.mjs` | 48 | `/property/:id` direct load/refresh, unknown ids, strict query params, Back to results, Back/Forward, state preservation, modal untouched, stale listings, mobile/keyboard |
 | `browser/ux2b-property-gallery.mjs` | 97 | property-page gallery: 12/8-photo pilots, mosaic layouts for 1–5+ photos, viewer (next/prev, counter, Escape, focus return, Tab trap, swipe), broken/malformed/empty images, lazy loading, mobile 390/320 carousel, refresh, Back/Forward, cards/modal/D4 unchanged, network |
+| `browser/ux2c-property-info.mjs` | 72 | property information: both pilots' facts/amenities/times, held 'Beach', show-all toggle, missing/malformed fields, description never shown, no policy/location claims, reserved booking column, 390/320/900 layouts, keyboard/semantics, gallery intact, direct URL/refresh/Back/Forward, modal/calendar/D4 unchanged, network |
 
 Unit tests import the real functions: `lib/page-source.mjs` extracts named declarations from the page's
 inline script at test time (`extract([...names])`); a renamed or removed function fails the suite instead of

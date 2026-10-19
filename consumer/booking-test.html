@@ -633,6 +633,42 @@
     .mv-prop__empty{ padding: 24px 0; }
     .mv-prop__empty h1{ font-size: 22px; margin: 0 0 6px; }
     @media(max-width: 760px){ .mv-prop__title{ font-size: 22px; } .mv-prop__hero{ aspect-ratio: 4 / 3; border-radius: 14px; } }
+    /* UX2c: property information area. Desktop: main column + reserved right column (future UX3 booking panel). */
+    .mv-prop__body{ display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 56px; align-items: start; margin-top: 20px; }
+    .mv-prop__main{ min-width: 0; }
+    .mv-prop__main .mv-prop__facts{ margin: 0 0 14px; }
+    .mv-prop__aside{ position: sticky; top: 20px; }
+    .mv-prop__card{ border: 1px solid #e6e6e6; border-radius: 16px; padding: 18px; box-shadow: 0 4px 18px rgba(0,0,0,.06); background: #fff; }
+    .mv-prop__card .mv-prop__note{ border: 0; padding: 0; max-width: none; font-size: 14px; line-height: 1.45; opacity: .85; }
+    .mv-prop__card .mv-prop__request{ margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+    .mv-prop__section{ border-top: 1px solid #ebebeb; padding: 24px 0 4px; margin-top: 20px; }
+    .mv-prop__h2{ font-size: 20px; font-weight: 750; margin: 0 0 16px; line-height: 1.25; }
+    .mv-amen{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; }
+    .mv-amen__item{ display: flex; align-items: center; gap: 12px; font-size: 15px; line-height: 1.3; min-width: 0; }
+    .mv-amen.is-collapsed .mv-amen__item:nth-child(n+11){ display: none; }
+    .mv-amen.fits-desktop + .mv-amen__toggle{ display: none; }
+    .mv-amen__item span{ overflow-wrap: anywhere; }
+    .mv-amen__icon{ flex: 0 0 22px; width: 22px; height: 22px; fill: none; stroke: #333; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .mv-amen__toggle{ margin-top: 18px; background: #fff; color: #222; border: 1px solid #222; border-radius: 10px; padding: 10px 16px; font: 600 14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; cursor: pointer; }
+    .mv-amen__toggle:hover{ background: #f7f7f7; }
+    .mv-amen__toggle:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
+    .mv-prop__times{ margin: 0; display: grid; gap: 10px; }
+    .mv-prop__times div{ display: flex; gap: 12px; font-size: 15px; }
+    .mv-prop__times dt{ font-weight: 650; min-width: 92px; }
+    .mv-prop__times dd{ margin: 0; }
+    @media(max-width: 900px){
+        .mv-prop__body{ grid-template-columns: minmax(0, 1fr); gap: 8px; }
+        .mv-prop__aside{ position: static; margin-top: 24px; }
+    }
+    @media(max-width: 760px){
+        .mv-prop__body{ margin-top: 16px; }
+        .mv-prop__section{ padding-top: 20px; margin-top: 16px; }
+        .mv-prop__h2{ font-size: 18px; margin-bottom: 14px; }
+        .mv-amen{ grid-template-columns: minmax(0, 1fr); gap: 12px; }
+        .mv-amen.is-collapsed .mv-amen__item:nth-child(n+7){ display: none; }
+        .mv-amen.fits-desktop + .mv-amen__toggle{ display: inline-block; }
+        .mv-prop__card{ box-shadow: none; padding: 14px; }
+    }
     /* UX2b: property photo gallery — desktop mosaic (one large + up to four), mobile swipe carousel.
        One set of tiles serves both layouts; tiles 6+ are display:none on desktop (so their lazy images never load there). */
     .mv-gal{ position: relative; margin: 0 0 4px; }
@@ -822,6 +858,29 @@
         if (Array.isArray(l.images)) for (const i of l.images) add(i && typeof i === "object" ? i.url : null);
         return out;
     }
+    /** UX2c: "HH:MM" (24 h) exactly as the feed sends it, else null — never a default time. */
+    const hhmm = (v) => (typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : null);
+    const MAX_AMENITIES = 60;
+    // Labels held back from display until the owner confirms what they mean for maraVilla guests. Hostaway's "Beach"
+    // flag does not say whether there is beach access, a beach nearby or a beachfront location, and the brief forbids
+    // implying beach access unless verified. Held labels are dropped here, before any rendering.
+    const AMENITY_HOLD = new Set(["beach"]);
+    /** UX2c: sanitized amenity labels in feed order — strings only, trimmed, 2–80 chars, printable, de-duplicated
+     *  (case-insensitive), capped; held labels removed. Nothing is renamed, merged or inferred. */
+    function cleanAmenities(list) {
+        if (!Array.isArray(list)) return [];
+        const out = [], seen = new Set();
+        for (const raw of list) {
+            if (typeof raw !== "string") continue;
+            const label = raw.replace(/\s+/g, " ").trim();
+            if (label.length < 2 || label.length > 80 || /[\u0000-\u001f\u007f<>]/.test(label)) continue;
+            const key = label.toLowerCase();
+            if (seen.has(key) || AMENITY_HOLD.has(key)) continue;
+            seen.add(key); out.push(label);
+            if (out.length >= MAX_AMENITIES) break;
+        }
+        return out;
+    }
     // Validate one listing from the API. Anything unusable is skipped, never invented.
     function toProperty(l) {
         if (!l || typeof l !== "object") return null;
@@ -844,7 +903,12 @@
             // UX1: facts the public feed already sends (F1 whitelist); null when absent, never guessed
             bedrooms: Number.isInteger(l.bedrooms) && l.bedrooms >= 0 ? l.bedrooms : null,
             bathrooms: typeof l.bathrooms === "number" && Number.isFinite(l.bathrooms) && l.bathrooms >= 0 ? l.bathrooms : null,
-            city: typeof l.city === "string" && l.city.trim() ? l.city.trim() : null
+            city: typeof l.city === "string" && l.city.trim() ? l.city.trim() : null,
+            // UX2c: property-information fields the feed already sends (UX2a whitelist); null / [] when absent or malformed
+            beds: Number.isInteger(l.beds) && l.beds > 0 && l.beds <= 50 ? l.beds : null,
+            amenities: cleanAmenities(l.amenities),
+            checkInFrom: hhmm(l.checkInFrom),
+            checkOutBy: hhmm(l.checkOutBy)
         };
     }
 
@@ -2209,6 +2273,87 @@
     }
     const factPill = (text) => { const el = document.createElement("span"); el.className = "mv-pill"; el.textContent = text; return el; };
 
+    // ---- UX2c: amenities + check-in/out (presentation of verified feed fields only) ----
+    // Icons are simple original line drawings, used only where a label's meaning is unambiguous; every other label
+    // gets a neutral check mark. Labels are shown exactly as the feed sends them (no renaming, merging or inferring).
+    const AMENITY_ICON_PATHS = {
+        wifi: "M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01",
+        snow: "M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5",
+        waves: "M2 12c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0M2 17c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0M8 9V4a2 2 0 0 1 4 0M14 9V4",
+        utensils: "M7 2v8a2 2 0 0 0 4 0V2M9 10v12M17 2c-2 2-2.5 5-2.5 8h2.5v12",
+        washer: "M5 2h14v20H5zM5 7h14M12 10.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM8 4.5h.01",
+        tv: "M3 5h18v12H3zM8 21h8M12 17v4",
+        laptop: "M5 5h14v10H5zM2 19h20",
+        cup: "M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h2a2 2 0 0 1 0 4h-2M8 2v3M12 2v3",
+        fridge: "M6 2h12v20H6zM6 10h12M9 5v2M9 13v3",
+        drop: "M12 3c3.5 4.5 6 7.5 6 11a6 6 0 0 1-12 0c0-3.5 2.5-6.5 6-11z",
+        alarm: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
+        chair: "M7 3v9h10V3M5 12h14M7 12l-1 9M17 12l1 9M7 16h10",
+        check: "M5 12.5l4.5 4.5L19 7.5"
+    };
+    const AMENITY_ICON_BY_LABEL = {
+        "internet": "wifi", "wireless": "wifi", "wifi": "wifi", "wi-fi": "wifi",
+        "air conditioning": "snow", "swimming pool": "waves",
+        "kitchen": "utensils", "cooking basics": "utensils",
+        "washing machine": "washer", "washer": "washer", "dryer": "washer",
+        "tv": "tv", "laptop friendly workspace": "laptop", "coffee/tea maker": "cup", "refrigerator": "fridge",
+        "hot water": "drop", "smoke detector": "alarm", "carbon monoxide detector": "alarm", "outdoor furniture": "chair"
+    };
+    const AMENITIES_COLLAPSED = 10; // desktop; CSS shows 6 on phones while collapsed (same toggle)
+    function amenityIcon(label) {
+        const key = AMENITY_ICON_BY_LABEL[label.toLowerCase()] || "check";
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("focusable", "false");
+        svg.setAttribute("class", "mv-amen__icon"); svg.dataset.icon = key;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path"); path.setAttribute("d", AMENITY_ICON_PATHS[key]);
+        svg.appendChild(path);
+        return svg;
+    }
+    function propSection(id, title) {
+        const sec = document.createElement("section"); sec.className = "mv-prop__section"; sec.id = id;
+        const h2 = document.createElement("h2"); h2.className = "mv-prop__h2"; h2.id = `${id}Title`; h2.textContent = title;
+        sec.setAttribute("aria-labelledby", h2.id); sec.appendChild(h2);
+        return sec;
+    }
+    function buildAmenities(p) {
+        const list = p.amenities, n = list.length;
+        const sec = propSection("mvPropAmenities", "Amenities");
+        const ul = document.createElement("ul"); ul.className = "mv-amen"; ul.id = "mvPropAmenitiesList";
+        list.forEach((label) => {
+            const li = document.createElement("li"); li.className = "mv-amen__item";
+            const span = document.createElement("span"); span.textContent = label;
+            li.append(amenityIcon(label), span); ul.appendChild(li);
+        });
+        sec.appendChild(ul);
+        if (n > 6) { // more than the phone preview: offer the toggle (on desktop it only appears when n > 10, via CSS)
+            ul.classList.add("is-collapsed"); if (n <= AMENITIES_COLLAPSED) ul.classList.add("fits-desktop");
+            const btn = document.createElement("button"); btn.type = "button"; btn.className = "mv-amen__toggle"; btn.id = "mvPropAmenitiesToggle";
+            btn.setAttribute("aria-controls", ul.id); btn.setAttribute("aria-expanded", "false");
+            const label = (open) => (open ? "Show fewer amenities" : `Show all ${n} amenities`);
+            btn.textContent = label(false);
+            btn.addEventListener("click", () => {
+                const open = btn.getAttribute("aria-expanded") !== "true";
+                ul.classList.toggle("is-collapsed", !open);
+                btn.setAttribute("aria-expanded", String(open)); btn.textContent = label(open);
+            });
+            sec.appendChild(btn);
+        }
+        return sec;
+    }
+    /** "15:00" -> "3:00 PM" (display only; the value itself comes from the feed). */
+    function fmtTime12(v) { const [h, m] = v.split(":").map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; }
+    function buildPractical(p) {
+        const rows = [];
+        if (p.checkInFrom) rows.push(["Check-in", `From ${fmtTime12(p.checkInFrom)}`]);
+        if (p.checkOutBy) rows.push(["Check-out", `By ${fmtTime12(p.checkOutBy)}`]);
+        if (!rows.length) return null; // nothing verified -> no section (no invented defaults)
+        const sec = propSection("mvPropPractical", "Check-in and check-out");
+        const dl = document.createElement("dl"); dl.className = "mv-prop__times";
+        for (const [k, v] of rows) { const row = document.createElement("div"); const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; row.append(dt, dd); dl.appendChild(row); }
+        sec.appendChild(dl);
+        return sec;
+    }
+
     // ---- UX2b: property photo gallery (presentation only; no API calls, no booking state) ----
     // Inline: mosaic on desktop, swipe carousel on mobile (same tiles, CSS decides). "Show all photos" opens the
     // full-screen viewer (#mvGallery), which has its own ids and handles its own keys (stopPropagation), so the
@@ -2380,15 +2525,30 @@
         } else {
             const ph = document.createElement("div"); ph.className = "mv-prop__hero mv-card__noimg"; ph.setAttribute("role", "img"); ph.setAttribute("aria-label", "No photo available"); $propertyView.appendChild(ph);
         }
+        // UX2c: information area — main column (facts, summary as in UX1, amenities, check-in/out) and a reserved
+        // right column for the future UX3 booking panel (today it holds only the existing request line + note).
+        const body = document.createElement("div"); body.className = "mv-prop__body";
+        const main = document.createElement("div"); main.className = "mv-prop__main"; main.id = "mvPropMain";
+        const aside = document.createElement("aside"); aside.className = "mv-prop__aside"; aside.id = "mvPropAside"; aside.setAttribute("aria-label", "Booking information");
+        body.append(main, aside);
+        $propertyView.appendChild(body);
         const facts = document.createElement("div"); facts.className = "mv-prop__facts"; facts.id = "mvPropFacts";
         facts.appendChild(factPill(`Sleeps ${p.sleeps}`));
         if (p.bedrooms !== null) facts.appendChild(factPill(p.bedrooms === 0 ? "Studio" : `${p.bedrooms} bedroom${p.bedrooms === 1 ? "" : "s"}`));
+        if (p.beds !== null) facts.appendChild(factPill(`${p.beds} bed${p.beds === 1 ? "" : "s"}`));
         if (p.bathrooms !== null) facts.appendChild(factPill(`${p.bathrooms} bath${p.bathrooms === 1 ? "" : "s"}`));
-        $propertyView.appendChild(facts);
-        if (p.summary) { const sum = document.createElement("p"); sum.className = "mv-prop__summary"; sum.textContent = p.summary; $propertyView.appendChild(sum); }
+        main.appendChild(facts);
+        // Summary: unchanged UX1 behaviour (one paragraph, same text). No "About" section: `description` is null by
+        // policy and the summary awaits the human-approval process, so nothing is added around it.
+        if (p.summary) { const sum = document.createElement("p"); sum.className = "mv-prop__summary"; sum.textContent = p.summary; main.appendChild(sum); }
+        if (p.amenities.length) main.appendChild(buildAmenities(p));
+        const practical = buildPractical(p);
+        if (practical) main.appendChild(practical);
+        const card = document.createElement("div"); card.className = "mv-prop__card";
         const ci = $checkinInput.value, co = $checkoutInput.value;
-        if (ci && co) { const rq = document.createElement("p"); rq.className = "mv-prop__request"; rq.id = "mvPropRequest"; rq.textContent = `Requested: ${fmtShort(ci)} → ${fmtShort(co)} · ${$("mvGuests").value} guest${$("mvGuests").value === "1" ? "" : "s"} (not yet checked for this property)`; $propertyView.appendChild(rq); }
-        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = ROUTE_TEXT.bookingSoon; $propertyView.appendChild(note);
+        if (ci && co) { const rq = document.createElement("p"); rq.className = "mv-prop__request"; rq.id = "mvPropRequest"; rq.textContent = `Requested: ${fmtShort(ci)} → ${fmtShort(co)} · ${$("mvGuests").value} guest${$("mvGuests").value === "1" ? "" : "s"} (not yet checked for this property)`; card.appendChild(rq); }
+        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = ROUTE_TEXT.bookingSoon; card.appendChild(note);
+        aside.appendChild(card);
         document.title = `${p.name} · ${baseTitle}`;
         if (focusTitlePending) { focusTitlePending = false; h1.focus(); }
     }
