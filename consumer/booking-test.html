@@ -565,6 +565,16 @@
     .mv-quote__note{ opacity: .7; font-size: 12px; }
     .mv-quote .mv-btn{ padding: 4px 10px; font-size: 12px; margin-left: 6px; }
     .mv-card.is-unconfirmed{ opacity: .6; }
+    /* D4: Book Direct savings (server-calculated estimate; display only) */
+    .mv-quote__direct{ font-weight: 800; font-size: 20px; color: #111; }
+    .mv-quote__directlabel{ font-weight: 600; font-size: 13px; color: #444; }
+    .mv-quote__std{ opacity: .9; }
+    .mv-quote__sub{ padding-left: 12px; font-size: 12px; opacity: .75; }
+    .mv-quote__save{ color: #0f7a3d; font-weight: 700; opacity: 1; }
+    .mv-quote__esttotal{ font-weight: 700; opacity: 1; }
+    .mv-card__meta .mv-card__direct{ display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 2px; }
+    .mv-card__directprice{ font-weight: 800; color: #111; }
+    .mv-card__directsave{ font-size: 12px; color: #0f7a3d; font-weight: 600; }
     /* N2: property-modal selection — check-in filled, check-out outlined, occupied nights tinted (search picker styles untouched) */
     .mv-cal__day--hostaway.is-inrange{ background: #ffe1e8; border-color: #ffe1e8; }
     .mv-cal__day--hostaway.is-start{ background: #ff385c; border-color: #ff385c; color: #fff; font-weight: 700; }
@@ -1207,8 +1217,39 @@
         }
         // Backend contract (F3): breakdown lines are the included components and sum to total.
         if (Math.abs(Math.round(sum * 100) / 100 - Math.round(json.total * 100) / 100) > 0.01) return UNCONFIRMED("BREAKDOWN_SUM");
-        return { state: "quoted", currency, total: json.total, nightlyAverage: json.nightlyAverage, nights: json.nights, breakdown, checkedAt, note: typeof json.note === "string" ? json.note : "" };
+        const quoted = { state: "quoted", currency, total: json.total, nightlyAverage: json.nightlyAverage, nights: json.nights, breakdown, checkedAt, note: typeof json.note === "string" ? json.note : "" };
+        quoted.direct = parseDirectEstimate(json.direct, quoted);
+        if (json.direct !== undefined && !quoted.direct) console.warn("[quote] direct estimate ignored (malformed or inconsistent)");
+        return quoted;
     }
+
+    // ---- D4: Book Direct savings (display only) ----
+    // The proxy attaches `direct` to a quoted stay. Every figure is calculated by the
+    // server (integer centavos, server-side policy); the browser only checks that the
+    // numbers are internally consistent with the standard quote and displays them.
+    // Anything missing, malformed or inconsistent => standard price only.
+    const DIRECT_NOTE = "Estimated direct-booking total. Final price confirmed at checkout.";
+    const toCents = (v) => Math.round(v * 100);
+    function parseDirectEstimate(d, quote) {
+        if (!d || typeof d !== "object" || d.estimate !== true) return null;
+        if (d.status === "estimate_unavailable") {
+            if (d.currency !== quote.currency) return null;
+            return { status: "estimate_unavailable", reason: typeof d.reason === "string" ? d.reason : "" };
+        }
+        if (d.status !== "estimated") return null;
+        if (d.currency !== quote.currency) return null;
+        const money = ["standardTotal", "eligibleAccommodation", "discount", "estimatedTotal"];
+        if (!money.every((k) => isMoney(d[k]))) return null;
+        if (typeof d.policyVersion !== "string" || !d.policyVersion) return null;
+        if (!Number.isInteger(d.rateBps) || d.rateBps < 0 || d.rateBps > 5000) return null;
+        const std = toCents(d.standardTotal), elig = toCents(d.eligibleAccommodation), disc = toCents(d.discount), est = toCents(d.estimatedTotal);
+        if (std !== toCents(quote.total)) return null;                       // must describe THIS standard quote
+        if (!(disc <= elig && elig <= std)) return null;
+        if (est !== std - disc) return null;                                // consistency check only, never a recalculation
+        if (disc === 0) return null;                                        // nothing to show as a saving
+        return { status: "estimated", currency: d.currency, standardTotal: d.standardTotal, discount: d.discount, estimatedTotal: d.estimatedTotal, policyVersion: d.policyVersion, rateBps: d.rateBps };
+    }
+    const directPctLabel = (bps) => `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(bps / 100)}%`;
 
     async function fetchQuote(req) {
         if (!API_BASE) return UNCONFIRMED("NO_BACKEND");
@@ -1255,6 +1296,7 @@
         if (!box) return;
         if (String(window.mvSelectedApartmentId) !== String(id)) return;
         box.innerHTML = "";
+        box.classList.remove("is-direct");
         const sel = selectionByListing.get(String(id));
         const entry = quoteByListing.get(String(id));
         if (!sel || !sel.start || !sel.end || !entry) return;
@@ -1263,8 +1305,24 @@
         const line = (txt, cls) => { const el = document.createElement("div"); el.textContent = txt; if (cls) el.className = cls; box.appendChild(el); return el; };
         if (r.state === "loading") { line("Checking price…"); return; }
         if (r.state === "quoted") {
-            line(`${fmtMoney(r.total, r.currency)} total · ${fmtMoney(r.nightlyAverage, r.currency)}/night · ${r.nights} night${r.nights === 1 ? "" : "s"} · ${currentGuests()} guest${currentGuests() === 1 ? "" : "s"}`, "mv-quote__total");
-            r.breakdown.forEach((b) => line(`${b.label}: ${fmtMoney(b.total, r.currency)}`, "mv-quote__line"));
+            const stay = `${r.nights} night${r.nights === 1 ? "" : "s"} · ${currentGuests()} guest${currentGuests() === 1 ? "" : "s"}`;
+            const d = r.direct && r.direct.status === "estimated" ? r.direct : null;
+            if (d) {
+                box.classList.add("is-direct");
+                const head = line(`${fmtMoney(d.estimatedTotal, d.currency)}`, "mv-quote__direct");
+                head.setAttribute("aria-label", `Estimated direct total ${fmtMoney(d.estimatedTotal, d.currency)}`);
+                const sub = document.createElement("span"); sub.className = "mv-quote__directlabel"; sub.textContent = " estimated direct total"; head.appendChild(sub);
+                line(`Standard price: ${fmtMoney(d.standardTotal, d.currency)} · ${fmtMoney(r.nightlyAverage, r.currency)}/night · ${stay}`, "mv-quote__line mv-quote__std");
+                r.breakdown.forEach((b) => line(`${b.label}: ${fmtMoney(b.total, r.currency)}`, "mv-quote__line mv-quote__sub"));
+                line(`Estimated Book Direct savings (${directPctLabel(d.rateBps)}): −${fmtMoney(d.discount, d.currency)}`, "mv-quote__line mv-quote__save");
+                line(`Estimated direct total: ${fmtMoney(d.estimatedTotal, d.currency)}`, "mv-quote__line mv-quote__esttotal");
+                line(DIRECT_NOTE, "mv-quote__note mv-quote__directnote");
+            } else {
+                box.classList.remove("is-direct");
+                line(`${fmtMoney(r.total, r.currency)} total · ${fmtMoney(r.nightlyAverage, r.currency)}/night · ${stay}`, "mv-quote__total");
+                r.breakdown.forEach((b) => line(`${b.label}: ${fmtMoney(b.total, r.currency)}`, "mv-quote__line"));
+                if (r.direct && r.direct.status === "estimate_unavailable") line("A Book Direct savings estimate is not available for this stay; the standard price above applies.", "mv-quote__note");
+            }
             line(`Checked ${r.checkedAt ? new Date(r.checkedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "just now"}. ${r.note || "Quote only — no inventory is held."}`, "mv-quote__note");
             return;
         }
@@ -1293,14 +1351,25 @@
             card.classList.remove("is-unconfirmed");
             if (result.state === "quoted") {
                 card.style.display = "";
-                if (subtitle) subtitle.textContent = `from ${fmtMoney(result.nightlyAverage, result.currency)}/night · ${fmtMoney(result.total, result.currency)} total`;
+                const d = result.direct && result.direct.status === "estimated" ? result.direct : null;
+                if (subtitle && d) {
+                    subtitle.textContent = "";
+                    subtitle.classList.add("mv-card__direct");
+                    const main = document.createElement("strong"); main.className = "mv-card__directprice"; main.textContent = `${fmtMoney(d.estimatedTotal, d.currency)} est. direct total`;
+                    const save = document.createElement("span"); save.className = "mv-card__directsave"; save.textContent = `Save ${fmtMoney(d.discount, d.currency)} (${directPctLabel(d.rateBps)}) · standard ${fmtMoney(d.standardTotal, d.currency)}`;
+                    subtitle.append(main, save);
+                } else if (subtitle) {
+                    subtitle.classList.remove("mv-card__direct");
+                    subtitle.textContent = `from ${fmtMoney(result.nightlyAverage, result.currency)}/night · ${fmtMoney(result.total, result.currency)} total`;
+                }
             } else if (result.state === "unavailable") {
                 card.style.display = "none";
+                if (subtitle) subtitle.classList.remove("mv-card__direct");
                 if (subtitle) subtitle.textContent = "Not available for these dates"; // never leave the transient "Checking…" behind (U5a)
             } else {
                 card.style.display = "";
                 card.classList.add("is-unconfirmed");
-                if (subtitle) subtitle.textContent = "Availability unknown — try again";
+                if (subtitle) { subtitle.classList.remove("mv-card__direct"); subtitle.textContent = "Availability unknown — try again"; }
             }
         }
         return results;
@@ -1872,7 +1941,7 @@
             if (!checkIn || !checkOut) {
                 $availabilityStatus.textContent = "Select check-in and check-out dates.";
             } else {
-                hostawayCards.forEach((card) => { card.style.display = ""; card.classList.remove("is-unconfirmed"); const s = card.querySelector(".mv-card__meta span:last-child"); if (s) s.textContent = "Checking…"; });
+                hostawayCards.forEach((card) => { card.style.display = ""; card.classList.remove("is-unconfirmed"); const s = card.querySelector(".mv-card__meta span:last-child"); if (s) { s.classList.remove("mv-card__direct"); s.textContent = "Checking…"; } });
                 $availabilityStatus.textContent = "Checking availability…";
                 const hostawayResults = await quoteHostawayCards(hostawayCards, checkIn, checkOut, currentGuests(), seq);
                 if (hostawayResults === null) { // superseded by a newer search/change: leave the (already cleared) UI alone
