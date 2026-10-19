@@ -70,11 +70,17 @@
 
 <div id="mvCalendarModal" class="mv-calendar" aria-hidden="true">
     <div class="mv-calendar__backdrop" data-cal-close="1"></div>
-    <div class="mv-calendar__panel" role="dialog" aria-modal="true" aria-label="Select dates">
+    <div class="mv-calendar__panel" id="mvCalendarPanel" role="dialog" aria-modal="true" aria-label="Select dates" tabindex="-1">
         <div class="mv-calendar__header">
             <div>Select dates</div>
             <button id="mvCalendarClose" class="mv-calendar__close" type="button" aria-label="Close">✕</button>
         </div>
+        <div class="mv-calendar__nav">
+            <button id="mvCalPrev" class="mv-calendar__navbtn" type="button" aria-label="Previous month">&#8249;</button>
+            <div id="mvCalRange" class="mv-calendar__range" role="status" aria-live="polite"></div>
+            <button id="mvCalNext" class="mv-calendar__navbtn" type="button" aria-label="Next month">&#8250;</button>
+        </div>
+        <div id="mvCalendarNotice" class="mv-calendar__notice" role="status" aria-live="polite"></div>
         <div id="mvCalendarMonths" class="mv-calendar__months"></div>
     </div>
 </div>
@@ -463,6 +469,32 @@
         padding: 6px 10px;
         cursor:pointer;
     }
+    /* N1: month navigation for the main search picker */
+    .mv-calendar__nav{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .mv-calendar__range{ font-weight:600; font-size: 14px; text-align:center; flex: 1; }
+    .mv-calendar__navbtn{
+        min-width: 44px;
+        min-height: 40px;
+        border: 1px solid #ddd;
+        background: #fff;
+        border-radius: 10px;
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .mv-calendar__navbtn:focus-visible, .mv-calendar__close:focus-visible, .mv-calendar .mv-cal__day:focus-visible{
+        outline: 2px solid #222;
+        outline-offset: 2px;
+    }
+    .mv-calendar__navbtn:disabled{ opacity: .35; cursor: not-allowed; }
+    .mv-calendar__notice{ min-height: 0; font-size: 13px; color: #b91c1c; margin-bottom: 6px; }
+    .mv-calendar__notice:empty{ display:none; }
     .mv-calendar__months{
         display:grid;
         grid-template-columns: repeat(2, 1fr);
@@ -1263,6 +1295,16 @@
     let calendarStart = null;
     let calendarEnd = null;
 
+    // N1: search-picker navigation policy. UI display policy only — the backend
+    // (calendar/quote) stays authoritative; Hostaway's observed ~366-day closure is
+    // NOT a business rule, so the horizon is one clearly named, editable value.
+    const SEARCH_PICKER_POLICY = Object.freeze({
+        maxAdvanceDays: 365,   // how far ahead guests may pick dates (navigation + selectable days)
+        maxStayNights: 90,     // backend-supported maximum stay (STAY_TOO_LONG above this)
+        visibleMonths: 2
+    });
+    let calendarViewMonth = null; // Date: first day of the LEFT visible month
+
     const parseISODate = (value) => {
         if (!value) return null;
         const [y, m, d] = value.split("-").map(Number);
@@ -1314,16 +1356,35 @@
         input.dispatchEvent(new Event("input", { bubbles: true }));
         input.dispatchEvent(new Event("change", { bubbles: true }));
     };
-    const renderCalendar = () => {
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        $calendarMonths.innerHTML = "";
-        const base = new Date();
-        base.setDate(1);
+    const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+    const addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+    const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
+    const lastSelectableDate = (today) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + SEARCH_PICKER_POLICY.maxAdvanceDays);
+    const nightsBetweenDates = (a, b) => Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+    /** Left-month bounds: never before the current month; right-hand month never after the last selectable month. */
+    const viewBounds = () => {
+        const today = startOfToday();
+        const min = startOfMonth(today);
+        const lastMonth = startOfMonth(lastSelectableDate(today));
+        const maxLeft = addMonths(lastMonth, -(SEARCH_PICKER_POLICY.visibleMonths - 1));
+        return { min, max: maxLeft < min ? min : maxLeft };
+    };
+    const clampViewMonth = (m) => { const { min, max } = viewBounds(); return m < min ? min : (m > max ? max : m); };
+    const setCalendarNotice = (text) => { const el = $("mvCalendarNotice"); if (el) el.textContent = text || ""; };
 
-        for (let offset = 0; offset < 2; offset += 1) {
+    const renderCalendar = () => {
+        const today = startOfToday();
+        const lastDay = lastSelectableDate(today);
+        const bounds = viewBounds();
+        calendarViewMonth = clampViewMonth(calendarViewMonth || startOfMonth(today));
+        $calendarMonths.innerHTML = "";
+        const base = calendarViewMonth;
+        const monthLabels = [];
+
+        for (let offset = 0; offset < SEARCH_PICKER_POLICY.visibleMonths; offset += 1) {
             const monthDate = new Date(base.getFullYear(), base.getMonth() + offset, 1);
             const monthTitle = monthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+            monthLabels.push(monthTitle);
             const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getDay();
             const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
 
@@ -1342,11 +1403,7 @@
             }
             for (let day = 1; day <= daysInMonth; day += 1) {
                 const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
-                const yyyy = date.getFullYear();
-                const mm = String(date.getMonth() + 1).padStart(2, "0");
-                const dd = String(date.getDate()).padStart(2, "0");
-                const iso = `${yyyy}-${mm}-${dd}`;
-                const isDisabled = date < today;
+                const isDisabled = date < today || date > lastDay; // past, or beyond the display horizon
                 const isStart = calendarStart && toISODate(date) === toISODate(calendarStart);
                 const isEnd = calendarEnd && toISODate(date) === toISODate(calendarEnd);
                 const inRange = calendarStart && calendarEnd && date > calendarStart && date < calendarEnd;
@@ -1356,23 +1413,52 @@
                 btn.className = "mv-cal__day";
                 btn.textContent = String(day);
                 btn.dataset.date = toISODate(date);
-                if (isDisabled) btn.classList.add("is-disabled");
-                if (isStart) btn.classList.add("is-start");
-                if (isEnd) btn.classList.add("is-end");
+                const longDate = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(date);
+                const stateLabel = isDisabled ? (date < today ? ", past date" : ", too far ahead") : isStart ? ", check-in" : isEnd ? ", check-out" : inRange ? ", in selected stay" : "";
+                btn.setAttribute("aria-label", longDate + stateLabel);
+                if (isDisabled) { btn.classList.add("is-disabled"); btn.setAttribute("aria-disabled", "true"); }
+                if (isStart) { btn.classList.add("is-start"); btn.setAttribute("aria-pressed", "true"); }
+                if (isEnd) { btn.classList.add("is-end"); btn.setAttribute("aria-pressed", "true"); }
                 if (inRange) btn.classList.add("is-inrange");
                 grid.appendChild(btn);
             }
             $calendarMonths.appendChild(monthEl);
         }
+        const range = $("mvCalRange");
+        if (range) range.textContent = monthLabels.length > 1 ? `${monthLabels[0]} – ${monthLabels[monthLabels.length - 1]}` : monthLabels[0];
+        const prev = $("mvCalPrev"), next = $("mvCalNext");
+        if (prev) prev.disabled = calendarViewMonth <= bounds.min;
+        if (next) next.disabled = calendarViewMonth >= bounds.max;
     };
+    /** Month navigation only changes the VIEW: no selection, search, quote, or network side effects. */
+    const navigateCalendar = (delta) => {
+        const target = clampViewMonth(addMonths(calendarViewMonth || startOfMonth(startOfToday()), delta));
+        const moved = target.getTime() !== (calendarViewMonth && calendarViewMonth.getTime());
+        const prev = $("mvCalPrev"), next = $("mvCalNext");
+        const hadFocus = document.activeElement; // captured first: the browser drops focus as soon as a focused button is disabled
+        calendarViewMonth = target;
+        if (moved) setCalendarNotice("");
+        renderCalendar();
+        // A nav button that just became disabled loses focus; hand it to the other one (or the dialog).
+        if (hadFocus === prev && prev.disabled) { if (!next.disabled) next.focus(); else $("mvCalendarPanel").focus(); }
+        else if (hadFocus === next && next.disabled) { if (!prev.disabled) prev.focus(); else $("mvCalendarPanel").focus(); }
+    };
+    let calendarOpener = null;
     const openCalendar = () => {
         calendarStart = parseISODate($checkinInput.value);
         calendarEnd = parseISODate($checkoutInput.value);
+        calendarViewMonth = clampViewMonth(startOfMonth(calendarStart || startOfToday()));
+        setCalendarNotice("");
         renderCalendar();
+        calendarOpener = document.activeElement;
         $calendarModal.setAttribute("aria-hidden", "false");
+        const panel = $("mvCalendarPanel");
+        if (panel) panel.focus();
     };
     const closeCalendar = () => {
+        const wasOpen = $calendarModal.getAttribute("aria-hidden") === "false";
         $calendarModal.setAttribute("aria-hidden", "true");
+        if (wasOpen && calendarOpener && typeof calendarOpener.focus === "function") calendarOpener.focus();
     };
 
     $datesBtn.addEventListener("click", openCalendar);
@@ -1382,6 +1468,13 @@
         clearDatesAndRefresh();
     });
     $calendarClose.addEventListener("click", closeCalendar);
+    $("mvCalPrev").addEventListener("click", () => navigateCalendar(-1));
+    $("mvCalNext").addEventListener("click", () => navigateCalendar(1));
+    $calendarModal.addEventListener("keydown", (event) => {
+        // Keyboard month paging while the picker is open (PageUp/PageDown), like common date pickers.
+        if (event.key === "PageUp") { event.preventDefault(); navigateCalendar(-1); }
+        else if (event.key === "PageDown") { event.preventDefault(); navigateCalendar(1); }
+    });
     $calendarModal.addEventListener("click", (event) => {
         if (event.target.dataset.calClose) closeCalendar();
     });
@@ -1392,12 +1485,22 @@
         if (!calendarStart || (calendarStart && calendarEnd)) {
             calendarStart = picked;
             calendarEnd = null;
+            setCalendarNotice("");
             renderCalendar();
             return;
         }
         if (picked < calendarStart) {
             calendarStart = picked;
             calendarEnd = null;
+            setCalendarNotice("");
+            renderCalendar();
+            return;
+        }
+        if (nightsBetweenDates(calendarStart, picked) > SEARCH_PICKER_POLICY.maxStayNights) {
+            // Beyond the backend's maximum stay: do not accept a check-out; start a new selection from this day.
+            calendarStart = picked;
+            calendarEnd = null;
+            setCalendarNotice(`Stays are limited to ${SEARCH_PICKER_POLICY.maxStayNights} nights. Check-in is now ${formatDisplayDate(picked)} — choose a check-out date.`);
             renderCalendar();
             return;
         }
