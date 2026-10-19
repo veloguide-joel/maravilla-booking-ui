@@ -548,6 +548,10 @@
     .mv-hcal__legend span{ display:inline-flex; align-items:center; gap:6px; }
     .mv-hcal__swatch{ display:inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid #e0e0e0; background:#fff; }
     .mv-hcal__months{ grid-template-columns: 1fr; gap: 10px; }
+    .mv-hcal__nav{ margin: 6px 0 8px; }
+    .mv-hcal .mv-calendar__range{ font-size: 13px; }
+    .mv-hcal .mv-cal__day:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
+    .mv-hcal__selection .mv-btn[aria-pressed="true"]{ border-color:#ff385c; background:#fff5f7; }
     .mv-hcal button.mv-cal__day--hostaway{ cursor: pointer; font: inherit; }
     .mv-hcal button.mv-cal__day--hostaway.is-blocked,
     .mv-hcal button.mv-cal__day--hostaway.is-unknown{ cursor: pointer; } /* selectable as check-out; validation decides */
@@ -686,7 +690,7 @@
     UI_TEXT.calOk = "Live calendar";
     UI_TEXT.calIncomplete = "Some dates could not be confirmed";
     UI_TEXT.calError = "Availability could not be confirmed";
-    UI_TEXT.calBeyond = "Dates beyond the shown window are not confirmed";
+    UI_TEXT.calBeyond = "Dates outside the shown months are not confirmed";
     const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const httpsUrl = (v) => (typeof v === "string" && /^https:\/\/[^\s"'<>]+$/i.test(v) ? v : null);
     const posInt = (v) => (Number.isInteger(v) && v > 0 ? v : null);
@@ -721,9 +725,13 @@
     // renders nights as "not confirmed" (never as available).
     // Night selection / arrival-departure validation is deliberately NOT part
     // of U2 (scheduled for U3): the calendar is read-only here.
-    const CAL_MONTHS = 2;
-    const calendarByListing = new Map(); // String(id) -> parsed state (keys normalised: ids arrive as numbers from listings and strings from the DOM)
-    let calendarRequestSeq = 0;
+    // N2: per-listing modal calendar state (keys normalised: ids arrive as numbers from listings and strings from the DOM):
+    //   { viewMonth: Date (left visible month), view: {key, loading, parsed}|null, viewToken,
+    //     stay: {key, loading, parsed}|null, stayToken }
+    // `view` = fresh availability for the VISIBLE months only (replaced on every navigation, shown as
+    // "not confirmed" while loading/failed). `stay` = a fresh window covering exactly the selected
+    // check-in..check-out; a stay is only ever judged against it. Tokens discard late responses.
+    const calendarByListing = new Map();
 
     const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
     const isIsoDate = (v) => typeof v === "string" && isoDateRe.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
@@ -809,38 +817,90 @@
         return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(y, m - 1, d));
     }
 
-    async function loadHostawayCalendar(id) {
-        const seq = ++calendarRequestSeq;
-        calendarByListing.delete(String(id)); // replace stale state for this listing
-        renderHostawayCalendar(id, { loading: true });
-        if (!API_BASE) {
-            calendarByListing.set(String(id), { status: "error", reason: "NO_BACKEND", nights: new Set(), ranges: [], from: null, to: null, checkedAt: null });
-            renderHostawayCalendar(id);
-            return;
-        }
-        let state;
+    const errState = (reason) => ({ status: "error", reason, nights: new Set(), ranges: [], from: null, to: null, checkedAt: null });
+    const calFor = (id) => {
+        const k = String(id);
+        let c = calendarByListing.get(k);
+        if (!c) { c = { viewMonth: null, view: null, viewToken: 0, stay: null, stayToken: 0 }; calendarByListing.set(k, c); }
+        return c;
+    };
+    const isCurrentCal = (id, cal) => calendarByListing.get(String(id)) === cal && String(window.mvSelectedApartmentId) === String(id);
+
+    /** One fresh, no-store calendar window for a listing. Never throws; any problem is an "error" state (fail closed). */
+    async function fetchCalendarWindow(id, from, to) {
+        if (!API_BASE) return errState("NO_BACKEND");
         try {
-            const response = await fetch(`${API_BASE}/api/booking/calendar?id=${encodeURIComponent(id)}`, { method: "GET", cache: "no-store" });
-            const json = response.ok ? await response.json() : null;
-            state = response.ok ? parseCalendarResponse(json, id) : { status: "error", reason: `HTTP_${response.status}`, nights: new Set(), ranges: [], from: null, to: null, checkedAt: null };
+            const qs = new URLSearchParams({ id: String(id), from, to });
+            const response = await fetch(`${API_BASE}/api/booking/calendar?${qs}`, { method: "GET", cache: "no-store" });
+            if (!response.ok) return errState(`HTTP_${response.status}`);
+            const parsed = parseCalendarResponse(await response.json(), id);
+            if (parsed.status !== "error" && (parsed.from !== from || parsed.to !== to)) return errState("WINDOW_MISMATCH"); // must answer the window we asked for
+            return parsed;
         } catch (err) {
-            state = { status: "error", reason: "FETCH_FAILED", nights: new Set(), ranges: [], from: null, to: null, checkedAt: null };
             console.error("Failed to load calendar:", err);
+            return errState("FETCH_FAILED");
         }
-        // Discard if the user has moved on to another listing or a newer request.
-        if (seq !== calendarRequestSeq || String(window.mvSelectedApartmentId) !== String(id)) return;
-        calendarByListing.set(String(id), state);
+    }
+
+    /** Window to fetch for the two visible months: clipped to today (past) and to the booking horizon. */
+    function viewWindowFor(viewMonth) {
+        const today = startOfToday();
+        const last = lastSelectableDate(today);
+        const monthStart = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
+        const monthsEnd = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + CALENDAR_POLICY.visibleMonths, 0);
+        return { from: toISODate(monthStart < today ? today : monthStart), to: toISODate(monthsEnd > last ? last : monthsEnd) };
+    }
+
+    /** Fetch fresh availability for the visible months. While loading (and on failure) every date is "not confirmed". */
+    async function loadViewWindow(id) {
+        const cal = calFor(id);
+        const token = ++cal.viewToken;
+        const win = viewWindowFor(cal.viewMonth);
+        const key = `${win.from}|${win.to}`;
+        cal.view = { key, loading: true, parsed: null };
+        renderHostawayCalendar(id);
+        const parsed = win.from <= win.to ? await fetchCalendarWindow(id, win.from, win.to) : errState("EMPTY_WINDOW");
+        if (token !== cal.viewToken || !isCurrentCal(id, cal)) return; // superseded by navigation / another property
+        cal.view = { key, loading: false, parsed };
         renderHostawayCalendar(id);
     }
 
-    function renderHostawayCalendar(id, { loading = false } = {}) {
+    /** Fresh window for exactly the selected stay. A complete selection is only "clear" once this answers. */
+    async function refreshStayCheck(id) {
+        const key = String(id);
+        const cal = calFor(id);
+        const sel = selectionByListing.get(key);
+        const token = ++cal.stayToken;
+        if (!sel || !sel.start || !sel.end) { cal.stay = null; return; }
+        const k = `${sel.start}|${sel.end}`;
+        cal.stay = { key: k, loading: true, parsed: null };
+        applyHostawaySelection(id);
+        const parsed = nightsSpan(sel.start, sel.end) > CALENDAR_POLICY.maxStayNights ? errState("TOO_LONG") : await fetchCalendarWindow(id, sel.start, sel.end);
+        const cur = selectionByListing.get(key);
+        if (token !== cal.stayToken || !isCurrentCal(id, cal) || !cur || `${cur.start}|${cur.end}` !== k) return;
+        cal.stay = { key: k, loading: false, parsed };
+        applyHostawaySelection(id);
+    }
+
+    /** Modal open / Retry: fresh visible window, plus a fresh stay check when a stay is selected. */
+    function loadHostawayCalendar(id) {
+        const sel = selectionByListing.get(String(id));
+        loadViewWindow(id);
+        if (sel && sel.start && sel.end) refreshStayCheck(id);
+    }
+
+    function renderHostawayCalendar(id) {
         const status = $("mvHostawayCalendarStatus");
         const months = $("mvHostawayCalendarMonths");
         const legend = $("mvHostawayCalendarLegend");
         if (!status || !months) return;
         if (String(window.mvSelectedApartmentId) !== String(id)) return;
-        const state = loading ? null : calendarByListing.get(String(id)) || null;
+        const cal = calendarByListing.get(String(id));
+        if (!cal || !cal.viewMonth) return;
+        const loading = !cal.view || cal.view.loading;
+        const state = loading ? null : cal.view.parsed;
         const todayIso = toISODate(new Date());
+        const lastIso = toISODate(lastSelectableDate(startOfToday()));
 
         status.innerHTML = "";
         if (loading) {
@@ -858,15 +918,21 @@
         } else {
             status.textContent = `${UI_TEXT.calOk} · checked ${state.checkedAt ? new Date(state.checkedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "just now"} · ${UI_TEXT.calBeyond}.`;
         }
-        if (legend) legend.style.display = loading ? "none" : "";
+        if (legend) legend.style.display = "";
+
+        // Navigation state
+        const bounds = viewBounds();
+        const prevBtn = $("mvHcalPrev"), nextBtn = $("mvHcalNext"), rangeEl = $("mvHcalRange");
+        if (prevBtn) prevBtn.disabled = cal.viewMonth <= bounds.min;
+        if (nextBtn) nextBtn.disabled = cal.viewMonth >= bounds.max;
 
         months.innerHTML = "";
-        if (loading) return;
-        const base = new Date();
-        base.setDate(1);
-        for (let offset = 0; offset < CAL_MONTHS; offset += 1) {
+        const base = cal.viewMonth;
+        const titles = [];
+        for (let offset = 0; offset < CALENDAR_POLICY.visibleMonths; offset += 1) {
             const monthDate = new Date(base.getFullYear(), base.getMonth() + offset, 1);
             const monthTitle = monthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
+            titles.push(monthTitle);
             const firstDay = monthDate.getDay();
             const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
             const monthEl = document.createElement("div");
@@ -882,78 +948,142 @@
             for (let i = 0; i < firstDay; i += 1) grid.appendChild(document.createElement("div"));
             for (let day = 1; day <= daysInMonth; day += 1) {
                 const iso = toISODate(new Date(monthDate.getFullYear(), monthDate.getMonth(), day));
-                const s = nightState(iso, state, todayIso);
-                // U3: future days are buttons (selectable as check-in only when the
-                // night is available; any future day may be chosen as check-out —
-                // the occupancy check covers the nights before it). Past days stay inert.
-                const cell = document.createElement(s === "past" ? "div" : "button");
-                if (s !== "past") cell.type = "button";
+                // past | far (beyond the booking horizon) | unavailable | available | unknown (loading, failed, outside the fetched window)
+                const s = iso < todayIso ? "past" : iso > lastIso ? "far" : nightState(iso, state, todayIso);
+                const inert = s === "past" || s === "far";
+                const cell = document.createElement(inert ? "div" : "button");
+                if (!inert) cell.type = "button";
                 cell.className = "mv-cal__day mv-cal__day--hostaway";
                 cell.textContent = String(day);
                 cell.dataset.date = iso;
                 cell.dataset.state = s;
-                if (s === "past") cell.classList.add("is-disabled");
+                if (inert) cell.classList.add("is-disabled");
                 if (s === "unavailable") cell.classList.add("is-blocked");
-                if (s === "unknown") cell.classList.add("is-unknown");
-                cell.setAttribute("aria-label", `${iso}: ${s === "unavailable" ? "unavailable" : s === "available" ? "available" : s === "past" ? "past" : "not confirmed"}`);
+                if (s === "unknown") { cell.classList.add("is-unknown"); cell.setAttribute("aria-disabled", "true"); } // unconfirmed dates cannot be chosen
+                cell.setAttribute("aria-label", `${iso}: ${s === "unavailable" ? "unavailable" : s === "available" ? "available" : s === "past" ? "past" : s === "far" ? "too far ahead" : "not confirmed"}`);
                 grid.appendChild(cell);
             }
             months.appendChild(monthEl);
         }
+        if (rangeEl) rangeEl.textContent = titles.length > 1 ? `${titles[0]} – ${titles[titles.length - 1]}` : titles[0];
         if (!months.dataset.bound) {
             months.dataset.bound = "1";
             months.addEventListener("click", (event) => {
                 const cell = event.target.closest(".mv-cal__day--hostaway");
-                if (!cell || cell.dataset.state === "past") return;
+                if (!cell || cell.dataset.state === "past" || cell.dataset.state === "far") return;
                 handleHostawayDayClick(String(window.mvSelectedApartmentId), cell.dataset.date, cell.dataset.state);
             });
         }
         applyHostawaySelection(id);
     }
 
-    /** Two-click selection: check-in (must be an available night), then check-out (any later day). */
-    function handleHostawayDayClick(id, iso, dayState) {
-        const sel = selectionByListing.get(String(id)) || { start: null, end: null };
+    /** Month navigation: fresh visible window; any shown price is dropped; a selected stay is re-checked; no quote is requested. */
+    function navigateModalCalendar(id, delta) {
+        const key = String(id);
+        const cal = calendarByListing.get(key);
+        if (!cal || !cal.viewMonth || String(window.mvSelectedApartmentId) !== key) return;
+        const target = clampViewMonth(addMonths(cal.viewMonth, delta));
+        if (target.getTime() === cal.viewMonth.getTime()) return;
+        const prevBtn = $("mvHcalPrev"), nextBtn = $("mvHcalNext");
+        const hadFocus = document.activeElement; // captured first: the browser drops focus as soon as a focused button is disabled
+        cal.viewMonth = target;
+        quoteByListing.delete(key);
+        modalQuoteSeq += 1;
+        const sel = selectionByListing.get(key);
+        if (sel && sel.message) selectionByListing.set(key, { start: sel.start || null, end: sel.end || null, edit: sel.edit });
+        loadViewWindow(id); // renders immediately (everything "not confirmed"), then the fresh window
+        if (sel && sel.start && sel.end) refreshStayCheck(id);
+        const panel = $("mvHostawayCalendar");
+        if (prevBtn && nextBtn) {
+            if (hadFocus === prevBtn && prevBtn.disabled) { if (!nextBtn.disabled) nextBtn.focus(); else if (panel) panel.focus(); }
+            else if (hadFocus === nextBtn && nextBtn.disabled) { if (!prevBtn.disabled) prevBtn.focus(); else if (panel) panel.focus(); }
+        }
+    }
+    function bindModalCalendarControls(id) {
+        const prevBtn = $("mvHcalPrev"), nextBtn = $("mvHcalNext"), box = $("mvHostawayCalendar");
+        if (!prevBtn || !nextBtn || !box) return;
+        prevBtn.addEventListener("click", () => navigateModalCalendar(id, -1));
+        nextBtn.addEventListener("click", () => navigateModalCalendar(id, 1));
+        box.addEventListener("keydown", (event) => {
+            if (event.key === "PageUp") { event.preventDefault(); navigateModalCalendar(id, -1); }
+            else if (event.key === "PageDown") { event.preventDefault(); navigateModalCalendar(id, 1); }
+        });
+    }
+
+    /** Search-bar dates as REQUESTED dates for the modal: only if they could be a bookable stay shape; the property's own calendar and the server decide the rest. */
+    function seedSelectionFromSearch() {
+        const a = $("mvCheckin").value, b = $("mvCheckout").value;
+        if (!a || !b) return { ok: false, invalid: false };
         const todayIso = toISODate(new Date());
-        const state = calendarByListing.get(String(id)) || null;
+        const lastIso = toISODate(lastSelectableDate(startOfToday()));
+        let reason = null;
+        if (!isIsoDate(a) || !isIsoDate(b)) reason = "they are not valid dates.";
+        else if (a < todayIso) reason = SELECTION_TEXT.PAST_START;
+        else if (!(b > a)) reason = SELECTION_TEXT.END_NOT_AFTER_START;
+        else if (nightsSpan(a, b) > CALENDAR_POLICY.maxStayNights) reason = SELECTION_TEXT.TOO_LONG;
+        else if (b > lastIso) reason = "those dates are further ahead than online booking allows.";
+        if (reason) return { ok: false, invalid: true, message: `Your search dates could not be used: ${reason}` };
+        return { ok: true, start: a, end: b };
+    }
+
+    /** Selection editing: check-in then check-out; "Change check-in/check-out" edits one end; every change drops the price and re-checks the stay. */
+    function handleHostawayDayClick(id, iso, dayState) {
+        const key = String(id);
+        const sel = selectionByListing.get(key) || { start: null, end: null };
+        const keep = (message) => { selectionByListing.set(key, { start: sel.start || null, end: sel.end || null, edit: sel.edit, message }); applyHostawaySelection(id); };
+        if (dayState === "unknown") { keep(`${fmtShort(iso)} is not confirmed yet — wait for the calendar to load, or retry.`); return; }
         let next;
-        if (!sel.start || (sel.start && sel.end) || iso <= sel.start) {
+        if (sel.edit === "end" && sel.start) {
+            if (iso <= sel.start) { keep(SELECTION_TEXT.END_NOT_AFTER_START); return; }
+            next = { start: sel.start, end: iso };
+        } else if (sel.edit === "start") {
+            if (dayState !== "available") { keep(dayState === "unavailable" ? `${fmtShort(iso)} is not available for check-in.` : `${fmtShort(iso)} could not be confirmed — choose another check-in date.`); return; }
+            next = { start: iso, end: sel.end && sel.end > iso ? sel.end : null };
+        } else if (!sel.start || (sel.start && sel.end) || iso <= sel.start) {
             // (re)start a selection: the check-in night itself must be available
             if (dayState !== "available") {
-                selectionByListing.set(String(id), { start: null, end: null, message: dayState === "unavailable" ? `${fmtShort(iso)} is not available for check-in.` : `${fmtShort(iso)} could not be confirmed — choose another check-in date.` });
+                selectionByListing.set(key, { start: null, end: null, message: dayState === "unavailable" ? `${fmtShort(iso)} is not available for check-in.` : `${fmtShort(iso)} could not be confirmed — choose another check-in date.` });
                 applyHostawaySelection(id);
                 return;
             }
             next = { start: iso, end: null };
         } else {
             next = { start: sel.start, end: iso };
-            const verdict = evaluateStaySelection(next.start, next.end, state, todayIso);
-            if (!verdict.ok) {
-                const msg = verdict.night && (verdict.reason === "NIGHT_UNAVAILABLE" || verdict.reason === "NIGHT_UNCONFIRMED")
-                    ? `${SELECTION_TEXT[verdict.reason]} (${fmtShort(verdict.night)}). Choose different dates.`
-                    : SELECTION_TEXT[verdict.reason] || "Those dates cannot be selected.";
-                next = { start: null, end: null, message: msg };
-            }
         }
-        selectionByListing.set(String(id), next);
-        quoteByListing.delete(String(id)); // any change of dates invalidates the previous quote (U4)
+        if (next.start && next.end && nightsSpan(next.start, next.end) > CALENDAR_POLICY.maxStayNights) next = { start: null, end: null, message: SELECTION_TEXT.TOO_LONG };
+        selectionByListing.set(key, next);
+        quoteByListing.delete(key); // any change of dates invalidates the previous quote (U4)
         modalQuoteSeq += 1;
+        const cal = calFor(id);
+        cal.stay = null; cal.stayToken += 1; // the previous availability decision does not survive a date edit
         applyHostawaySelection(id);
+        if (next.start && next.end) refreshStayCheck(id);
     }
 
-    /** Paint the current selection for `id` and refresh the summary line. Re-validates against fresh calendar data. */
+    /** Paint the current selection for `id` and refresh the summary line. A complete stay is judged only against its own fresh window. */
     function applyHostawaySelection(id) {
         const months = $("mvHostawayCalendarMonths");
         const summary = $("mvHostawaySelection");
         if (!months || !summary) return;
         if (String(window.mvSelectedApartmentId) !== String(id)) return;
-        const state = calendarByListing.get(String(id)) || null;
+        const key = String(id);
+        const cal = calFor(id);
         const todayIso = toISODate(new Date());
-        let sel = selectionByListing.get(String(id)) || { start: null, end: null };
-        // A completed selection must still pass against the latest calendar (e.g. after Retry/reload).
+        let sel = selectionByListing.get(key) || { start: null, end: null };
+        let verified = false, pending = false, checkFailed = false;
         if (sel.start && sel.end) {
-            const v = evaluateStaySelection(sel.start, sel.end, state, todayIso);
-            if (!v.ok) { sel = { start: null, end: null, message: `${SELECTION_TEXT[v.reason] || "Selected dates are no longer valid"}${v.night ? ` (${fmtShort(v.night)})` : ""}. Please choose again.` }; selectionByListing.set(String(id), sel); }
+            const stay = cal.stay;
+            if (!stay || stay.key !== `${sel.start}|${sel.end}` || stay.loading) pending = true;
+            else if (!stay.parsed || stay.parsed.status === "error") checkFailed = true;
+            else {
+                const v = evaluateStaySelection(sel.start, sel.end, stay.parsed, todayIso);
+                if (!v.ok) {
+                    sel = { start: null, end: null, message: `${fmtShort(sel.start)} → ${fmtShort(sel.end)}: ${SELECTION_TEXT[v.reason] || "Selected dates are no longer valid"}${v.night ? ` (${fmtShort(v.night)})` : ""}. Please choose again.` };
+                    selectionByListing.set(key, sel);
+                    cal.stay = null; cal.stayToken += 1;
+                    quoteByListing.delete(key); modalQuoteSeq += 1;
+                } else verified = true;
+            }
         }
         months.querySelectorAll(".mv-cal__day--hostaway").forEach((cell) => {
             const d = cell.dataset.date;
@@ -963,9 +1093,20 @@
         });
         summary.innerHTML = "";
         const text = document.createElement("span");
+        const addBtn = (label, handler, cls = "mv-btn mv-btn--ghost", extra) => {
+            const b = document.createElement("button");
+            b.type = "button"; b.className = cls; b.textContent = label;
+            if (extra) Object.entries(extra).forEach(([k, v]) => b.setAttribute(k, v));
+            b.addEventListener("click", handler);
+            summary.appendChild(b);
+            return b;
+        };
         if (sel.start && sel.end) {
             const n = nightsSpan(sel.start, sel.end);
-            text.textContent = `${fmtShort(sel.start)} → ${fmtShort(sel.end)} · ${n} night${n === 1 ? "" : "s"} · occupied nights clear. Final eligibility (stay rules, capacity) and price are confirmed in the next step.`;
+            const range = `${fmtShort(sel.start)} → ${fmtShort(sel.end)} · ${n} night${n === 1 ? "" : "s"}`;
+            if (pending) text.textContent = `${range} · checking availability…`;
+            else if (checkFailed) { text.textContent = `${range} · availability for these dates could not be confirmed.`; text.className = "mv-hcal__warn"; }
+            else text.textContent = `${range} · occupied nights clear. Final eligibility (stay rules, capacity) and price are confirmed in the next step.`;
         } else if (sel.start) {
             text.textContent = `Check-in ${fmtShort(sel.start)} — now choose a check-out date.`;
         } else if (sel.message) {
@@ -975,23 +1116,32 @@
             text.textContent = "Select a check-in night, then a check-out day.";
         }
         summary.appendChild(text);
-        if (sel.start || sel.end) {
-            const clear = document.createElement("button");
-            clear.type = "button";
-            clear.className = "mv-btn mv-btn--ghost";
-            clear.textContent = "Clear";
-            clear.addEventListener("click", () => { selectionByListing.set(String(id), { start: null, end: null }); quoteByListing.delete(String(id)); applyHostawaySelection(id); });
-            summary.appendChild(clear);
+        if (sel.message && (sel.start || sel.end)) {
+            const warn = document.createElement("span"); warn.className = "mv-hcal__warn"; warn.textContent = sel.message; summary.appendChild(warn);
         }
-        // U4: price check for a complete, occupancy-clear selection.
+        if (sel.edit === "start" || sel.edit === "end") {
+            const hint = document.createElement("span");
+            hint.textContent = sel.edit === "start" ? "Choose a new check-in date." : "Choose a new check-out date.";
+            summary.appendChild(hint);
+        }
+        if (checkFailed) addBtn("Retry", () => refreshStayCheck(id));
         if (sel.start && sel.end) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "mv-btn mv-btn--primary";
+            addBtn("Change check-in", () => { selectionByListing.set(key, { start: sel.start, end: sel.end, edit: sel.edit === "start" ? undefined : "start" }); applyHostawaySelection(id); }, "mv-btn mv-btn--ghost", { "aria-pressed": String(sel.edit === "start") });
+            addBtn("Change check-out", () => { selectionByListing.set(key, { start: sel.start, end: sel.end, edit: sel.edit === "end" ? undefined : "end" }); applyHostawaySelection(id); }, "mv-btn mv-btn--ghost", { "aria-pressed": String(sel.edit === "end") });
+        }
+        if (sel.start || sel.end) {
+            addBtn("Clear dates", () => {
+                selectionByListing.set(key, { start: null, end: null });
+                quoteByListing.delete(key); // no price survives clearing
+                modalQuoteSeq += 1;
+                const c = calFor(id); c.stay = null; c.stayToken += 1;
+                applyHostawaySelection(id);
+            }, "mv-btn mv-btn--ghost", { "aria-label": "Clear dates" });
+        }
+        // U4: price check, offered only once the fresh stay check has cleared the occupied nights.
+        if (verified) {
+            const btn = addBtn("Check price", () => requestModalQuote(id), "mv-btn mv-btn--primary");
             btn.id = "mvHostawayQuoteBtn";
-            btn.textContent = "Check price";
-            btn.addEventListener("click", () => requestModalQuote(id));
-            summary.appendChild(btn);
         }
         renderModalQuote(id);
     }
@@ -1295,10 +1445,10 @@
     let calendarStart = null;
     let calendarEnd = null;
 
-    // N1: search-picker navigation policy. UI display policy only — the backend
+    // N1/N2: calendar navigation policy shared by the main search picker and the property modal. UI display policy only — the backend
     // (calendar/quote) stays authoritative; Hostaway's observed ~366-day closure is
     // NOT a business rule, so the horizon is one clearly named, editable value.
-    const SEARCH_PICKER_POLICY = Object.freeze({
+    const CALENDAR_POLICY = Object.freeze({
         maxAdvanceDays: 365,   // how far ahead guests may pick dates (navigation + selectable days)
         maxStayNights: 90,     // backend-supported maximum stay (STAY_TOO_LONG above this)
         visibleMonths: 2
@@ -1359,14 +1509,14 @@
     const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
     const addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, 1);
     const startOfToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
-    const lastSelectableDate = (today) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + SEARCH_PICKER_POLICY.maxAdvanceDays);
+    const lastSelectableDate = (today) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + CALENDAR_POLICY.maxAdvanceDays);
     const nightsBetweenDates = (a, b) => Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
     /** Left-month bounds: never before the current month; right-hand month never after the last selectable month. */
     const viewBounds = () => {
         const today = startOfToday();
         const min = startOfMonth(today);
         const lastMonth = startOfMonth(lastSelectableDate(today));
-        const maxLeft = addMonths(lastMonth, -(SEARCH_PICKER_POLICY.visibleMonths - 1));
+        const maxLeft = addMonths(lastMonth, -(CALENDAR_POLICY.visibleMonths - 1));
         return { min, max: maxLeft < min ? min : maxLeft };
     };
     const clampViewMonth = (m) => { const { min, max } = viewBounds(); return m < min ? min : (m > max ? max : m); };
@@ -1381,7 +1531,7 @@
         const base = calendarViewMonth;
         const monthLabels = [];
 
-        for (let offset = 0; offset < SEARCH_PICKER_POLICY.visibleMonths; offset += 1) {
+        for (let offset = 0; offset < CALENDAR_POLICY.visibleMonths; offset += 1) {
             const monthDate = new Date(base.getFullYear(), base.getMonth() + offset, 1);
             const monthTitle = monthDate.toLocaleString("en-US", { month: "long", year: "numeric" });
             monthLabels.push(monthTitle);
@@ -1496,11 +1646,11 @@
             renderCalendar();
             return;
         }
-        if (nightsBetweenDates(calendarStart, picked) > SEARCH_PICKER_POLICY.maxStayNights) {
+        if (nightsBetweenDates(calendarStart, picked) > CALENDAR_POLICY.maxStayNights) {
             // Beyond the backend's maximum stay: do not accept a check-out; start a new selection from this day.
             calendarStart = picked;
             calendarEnd = null;
-            setCalendarNotice(`Stays are limited to ${SEARCH_PICKER_POLICY.maxStayNights} nights. Check-in is now ${formatDisplayDate(picked)} — choose a check-out date.`);
+            setCalendarNotice(`Stays are limited to ${CALENDAR_POLICY.maxStayNights} nights. Check-in is now ${formatDisplayDate(picked)} — choose a check-out date.`);
             renderCalendar();
             return;
         }
@@ -1612,8 +1762,13 @@
         const modalLink = p.url ? `<a class="mv-link" href="${esc(p.url)}" target="_blank" rel="noopener">Open full property page →</a>` : "";
         // U2: read-only live calendar for Hostaway listings (per-listing state, departure-exclusive).
         const modalCalendar = isHostaway ? `
-                    <div class="mv-hcal" id="mvHostawayCalendar" aria-live="polite">
+                    <div class="mv-hcal" id="mvHostawayCalendar" aria-live="polite" tabindex="-1">
                         <div class="mv-hcal__status" id="mvHostawayCalendarStatus"></div>
+                        <div class="mv-calendar__nav mv-hcal__nav">
+                            <button id="mvHcalPrev" class="mv-calendar__navbtn" type="button" aria-label="Previous month">&#8249;</button>
+                            <div id="mvHcalRange" class="mv-calendar__range"></div>
+                            <button id="mvHcalNext" class="mv-calendar__navbtn" type="button" aria-label="Next month">&#8250;</button>
+                        </div>
                         <div class="mv-hcal__legend" id="mvHostawayCalendarLegend">
                             <span><i class="mv-hcal__swatch"></i>Available night</span>
                             <span><i class="mv-hcal__swatch is-blocked"></i>Unavailable night</span>
@@ -1655,10 +1810,21 @@
             // first thing shown on (re)open. A still-valid date selection is kept and
             // re-validated against the fresh calendar by applyHostawaySelection().
             const key = String(p.id);
+            // N2: the search-bar dates are REQUESTED dates for this property (shape-checked only); the
+            // property's own live calendar and the server decide. With no usable search dates, a prior
+            // selection for this property is kept but re-checked against fresh data.
             const prevSel = selectionByListing.get(key);
-            if (prevSel && prevSel.message) selectionByListing.set(key, { start: prevSel.start || null, end: prevSel.end || null });
+            const seed = seedSelectionFromSearch();
+            let sel = { start: null, end: null };
+            if (seed.ok) sel = { start: seed.start, end: seed.end };
+            else if (prevSel && (prevSel.start || prevSel.end)) sel = { start: prevSel.start || null, end: prevSel.end || null };
+            if (seed.invalid) sel.message = seed.message;
+            selectionByListing.set(key, sel);
             quoteByListing.delete(key);
-            loadHostawayCalendar(p.id); // live calendar + selection + quote; no reserve/checkout action exists
+            modalQuoteSeq += 1; // no earlier price or in-flight quote survives (re)opening a property
+            calendarByListing.set(key, { viewMonth: clampViewMonth(startOfMonth(sel.start ? parseISODate(sel.start) : startOfToday())), view: null, viewToken: 0, stay: null, stayToken: 0 });
+            bindModalCalendarControls(p.id);
+            loadHostawayCalendar(p.id); // fresh visible months + fresh stay check; no reserve/checkout action exists
         }
     }
     function closeModal() {
