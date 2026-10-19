@@ -1,0 +1,16 @@
+{
+  "name": "maravilla-booking-ui-tests",
+  "private": true,
+  "type": "module",
+  "description": "Regression tests for consumer/booking-test.html. Dev-only: nothing here is deployed (see ../.vercelignore).",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "npm run test:unit && npm run test:browser",
+    "test:unit": "node --test \"unit/*.test.mjs\"",
+    "test:browser": "node browser/run.mjs",
+    "install:browser": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "1.56.0"
+  }
+}
