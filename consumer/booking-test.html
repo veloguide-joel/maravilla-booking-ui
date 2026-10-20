@@ -730,7 +730,15 @@
     .mv-panel__fields{ display: grid; grid-template-columns: 1fr 1fr; margin: 16px 0 0; border: 1px solid #cfcfcf; border-radius: 12px; overflow: hidden; }
     .mv-panel__field{ padding: 9px 12px; min-width: 0; }
     .mv-panel__field--out{ border-left: 1px solid #cfcfcf; }
-    .mv-panel__field--guests{ grid-column: 1 / -1; border-top: 1px solid #cfcfcf; }
+    .mv-panel__field--guests{ grid-column: 1 / -1; border-top: 1px solid #cfcfcf; position: relative; }
+    /* UX5: transparent native select over the Guests field (keeps the compact look; native touch/keyboard behaviour). */
+    .mv-panel__guestsel{ position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; border: 0; margin: 0; }
+    .mv-panel__field--guests:hover{ background: #f7f7f7; }
+    .mv-panel__field--guests:focus-within{ box-shadow: inset 0 0 0 2px #222; border-radius: 0 0 11px 11px; }
+    .mv-panel__field--guests dd{ display: flex; align-items: center; justify-content: space-between; }
+    .mv-panel__field--guests dd::after{ content: ""; width: 7px; height: 7px; border-right: 2px solid #444; border-bottom: 2px solid #444; transform: rotate(45deg); margin: -4px 4px 0 8px; flex: 0 0 auto; }
+    .mv-panel__field--guests.is-over dd{ color: #9a3412; }
+    .mv-panel__status--hint{ color: #9a3412; }
     .mv-panel__field dt{ font-size: 10.5px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: #333; }
     .mv-panel__field dd{ margin: 2px 0 0; font-size: 15px; overflow-wrap: anywhere; }
     .mv-panel__rows{ margin: 16px 0 0; padding-top: 12px; border-top: 1px solid #eee; display: grid; gap: 8px; }
@@ -2839,6 +2847,23 @@
     };
     const fmtLongDate = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(y, m - 1, d)); };
     const panelLive = () => routeView === "property";
+    /** UX5: commit a new guest count from the panel. Same committed state as dates (the shared search input), URL via
+     *  replaceState, then the panel is rebuilt: the old price disappears at once and the existing UX3 pipeline re-runs.
+     *  Each rebuild bumps panelSeq, so with rapid changes only the latest count can ever be displayed. */
+    function commitPanelGuests(p, sel) {
+        const v = Number(sel.value);
+        const shared = $("mvGuests");
+        const allowed = Number.isInteger(v) && v >= 1 && v <= p.sleeps && [...shared.options].some((o) => o.value === String(v));
+        if (!allowed) { sel.value = String(currentGuests()); return; }   // never accept a count above verified capacity
+        if (v === currentGuests()) return;                               // same value: no requote
+        shared.value = String(v);
+        shared.dispatchEvent(new Event("change", { bubbles: true }));    // search page mirrors it (runSearch invalidates search quotes)
+        history.replaceState(history.state, "", window.location.pathname + searchQueryString());
+        panelSeq += 1;
+        const card = $("mvPanel");
+        if (card) card.replaceWith(buildBookingPanel(p));
+        const again = $("mvPanelGuestsSelect"); if (again) again.focus();
+    }
     function buildBookingPanel(p) {
         const seq = ++panelSeq;
         const card = document.createElement("div"); card.className = "mv-prop__card mv-panel"; card.id = "mvPanel";
@@ -2860,7 +2885,20 @@
         const hasDates = seed.ok;
         field("mvPanelCheckin", "Check-in", hasDates ? fmtLongDate(seed.start) : "Add date", "mv-panel__field--in", (b) => openDateEditor(p, b, "checkin"));
         field("mvPanelCheckout", "Checkout", hasDates ? fmtLongDate(seed.end) : "Add date", "mv-panel__field--out", (b) => openDateEditor(p, b, "checkout"));
-        field("mvPanelGuests", "Guests", `${guests} guest${guests === 1 ? "" : "s"}`, "mv-panel__field--guests"); // display-only until UX5
+        // UX5: guest count = a native select laid over the field (the visible text stays the same compact design).
+        // Options are 1..verified capacity; a larger committed count (e.g. from a shared URL) is shown as a disabled,
+        // flagged option so it is never silently accepted and can be corrected here. The backend stays authoritative.
+        const guestsDd = field("mvPanelGuests", "Guests", `${guests} guest${guests === 1 ? "" : "s"}`, "mv-panel__field--guests");
+        const overCapacity = guests > p.sleeps;
+        guestsDd.parentElement.classList.toggle("is-over", overCapacity);
+        guestsDd.setAttribute("aria-hidden", "true"); // the select below carries the accessible name and value
+        const guestSel = document.createElement("select"); guestSel.id = "mvPanelGuestsSelect"; guestSel.className = "mv-panel__guestsel";
+        guestSel.setAttribute("aria-label", "Guests");
+        for (let n = 1; n <= p.sleeps; n += 1) { const o = document.createElement("option"); o.value = String(n); o.textContent = `${n} guest${n === 1 ? "" : "s"}`; guestSel.appendChild(o); }
+        if (overCapacity) { const o = document.createElement("option"); o.value = String(guests); o.textContent = `${guests} guests (more than this property sleeps)`; o.disabled = true; guestSel.appendChild(o); }
+        guestSel.value = String(guests);
+        guestSel.addEventListener("change", () => commitPanelGuests(p, guestSel));
+        guestsDd.parentElement.appendChild(guestSel);
         const extra = document.createElement("div"); extra.className = "mv-panel__extra";
         const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = PANEL_TEXT.soon;
         card.append(live, fields, statusBox, extra, note);
@@ -2870,9 +2908,11 @@
         const head = (text, cls) => { live.innerHTML = ""; statusBox.innerHTML = ""; extra.innerHTML = ""; card.dataset.state = cls; live.appendChild(el("div", `mv-panel__head mv-panel__head--${cls}`, text)); };
         const retryButton = () => { const b = el("button", "mv-btn mv-btn--ghost mv-panel__retry", "Retry"); b.type = "button"; b.id = "mvPanelRetry"; b.addEventListener("click", () => { if (!current()) return; panelSeq += 1; card.replaceWith(buildBookingPanel(p)); }); return b; };
 
+        const capacityHint = () => { if (overCapacity) statusBox.appendChild(el("div", "mv-panel__status mv-panel__status--hint", `This property sleeps up to ${p.sleeps} guest${p.sleeps === 1 ? "" : "s"}. Choose fewer guests above.`)); };
         if (!hasDates) {
             head(PANEL_TEXT.selectDates, "empty");
             if (seed.invalid) statusBox.appendChild(el("div", "mv-panel__status", seed.message));
+            capacityHint();
             return card;
         }
         head(PANEL_TEXT.checking, "loading");
@@ -2898,6 +2938,7 @@
             if (r.state === "unavailable") {
                 head(PANEL_TEXT.unavailable, "unavailable");
                 r.reasons.forEach((x) => statusBox.appendChild(el("div", "mv-panel__status", x.message || x.code)));
+                capacityHint();
                 return;
             }
             if (r.state !== "quoted") {

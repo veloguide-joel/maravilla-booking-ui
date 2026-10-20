@@ -172,7 +172,8 @@ await T.done();
 // ===== 10. Keyboard and accessibility =====
 T = await make(); await T.go("/property/603564");
 const order = []; for (let i = 0; i < 4; i++) { await T.page.keyboard.press("Tab"); order.push(await T.page.evaluate(() => document.activeElement.id || document.activeElement.className)); }
-ok("10 Tab order from the title: Show all photos, the two UX4b date fields, then Show all amenities (amenities are not tab stops)", same(order, ["mvPropGalleryAll", "mvPanelCheckin", "mvPanelCheckout", "mvPropAmenitiesToggle"]), order);
+const order5 = order.slice(); await T.page.keyboard.press("Tab"); order5.push(await T.page.evaluate(() => document.activeElement.id || document.activeElement.className));
+ok("10 Tab order from the title: Show all photos, the two UX4b date fields, the UX5 guest selector, then Show all amenities (amenities are not tab stops)", same(order5, ["mvPropGalleryAll", "mvPanelCheckin", "mvPanelCheckout", "mvPanelGuestsSelect", "mvPropAmenitiesToggle"]), order5);
 await T.page.focus("#mvPropAmenitiesToggle"); await T.page.keyboard.press("Enter"); s = await T.info();
 ok("10 Enter toggles the amenity list (aria-expanded true)", s.toggle.expanded === "true" && s.amenVisible === 20, s.toggle);
 await T.page.keyboard.press("Space"); s = await T.info();

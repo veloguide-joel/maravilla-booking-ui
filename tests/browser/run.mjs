@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const suites = ["n1-search-picker.mjs", "n2-modal-calendar.mjs", "d4-savings-display.mjs", "u5b-search-regression.mjs", "ux1-property-routes.mjs", "ux2b-property-gallery.mjs", "ux2c-property-info.mjs", "ux3-booking-panel.mjs", "ux4a-calendar-parity.mjs", "ux4b-date-editor.mjs"];
+const suites = ["n1-search-picker.mjs", "n2-modal-calendar.mjs", "d4-savings-display.mjs", "u5b-search-regression.mjs", "ux1-property-routes.mjs", "ux2b-property-gallery.mjs", "ux2c-property-info.mjs", "ux3-booking-panel.mjs", "ux4a-calendar-parity.mjs", "ux4b-date-editor.mjs", "ux5-guest-editing.mjs"];
 let failed = 0;
 for (const s of suites) {
   const r = spawnSync(process.execPath, [path.join(dir, s)], { encoding: "utf8", env: process.env });
