@@ -79,9 +79,10 @@ await t.next(); await t.next();
 await t.pick("2026-12-20"); s = await t.state();
 ok("click does not jump view back; check-in highlighted", s.titles[0] === "December 2026" && s.start === "2026-12-20" && s.end === null && s.open, s);
 await t.pick("2026-12-24"); s = await t.state();
-ok("Dec 20-24 selected: inputs, label, closed", !s.open && s.inputs[0] === "2026-12-20" && s.inputs[1] === "2026-12-24" && s.btn === "Dec 20 - Dec 24", s);
+ok("Dec 20-24 selected: inputs, label; picker stays open showing the range (UX6; was: closes)", s.open && s.inputs[0] === "2026-12-20" && s.inputs[1] === "2026-12-24" && s.btn === "Dec 20 - Dec 24" && s.start === "2026-12-20" && s.end === "2026-12-24", s);
 ok("selecting dates made no API call (search not run)", t.apiLog.length === baseline, t.apiLog.slice(baseline));
-ok("focus returned to Dates button", await t.page.evaluate(() => document.activeElement && document.activeElement.id === "mvDatesBtn"));
+await t.page.keyboard.press("Escape"); // UX6: closing is now the guest's choice (Escape / Close / outside / footer)
+ok("focus returned to Dates button (after closing; UX6)", await t.page.evaluate(() => document.activeElement && document.activeElement.id === "mvDatesBtn"));
 // persistence through navigation (reopen -> view on check-in month)
 await t.open(); s = await t.state();
 ok("reopen shows the selected month with range painted", s.titles[0] === "December 2026" && s.start === "2026-12-20" && s.end === "2026-12-24" && s.inrange === 3, s);
@@ -90,7 +91,8 @@ await t.next(); await t.next(); s = await t.state(); ok("selection persists afte
 ok("still zero API calls", t.apiLog.length === baseline);
 // Dec 31 - Jan 3 across the year
 await t.pick("2026-12-31"); await t.pick("2027-01-03"); s = await t.state();
-ok("Dec 31 - Jan 3 selected across year boundary", !s.open && s.inputs.join() === "2026-12-31,2027-01-03" && s.btn === "Dec 31 - Jan 3", s);
+ok("Dec 31 - Jan 3 selected across year boundary (picker stays open; UX6)", s.open && s.inputs.join() === "2026-12-31,2027-01-03" && s.btn === "Dec 31 - Jan 3", s);
+await t.page.keyboard.press("Escape"); // UX6: close before using the external button
 // Search after selection issues the existing quote calls only
 await t.page.click("#mvSearchBtn"); await t.page.waitForFunction(() => !document.getElementById("mvSearchBtn").disabled);
 const qs = t.apiLog.slice(baseline);
@@ -102,6 +104,7 @@ ok("earlier day restarts selection (existing behaviour)", s.start === "2026-11-0
 await t.goTo("2026-10-18"); const before = await t.state(); await t.pick("2026-10-18"); s = await t.state();
 ok("past day not selectable", s.start === before.start && s.end === before.end && s.open, s);
 await t.pick("2026-11-12"); s = await t.state(); ok("check-out chosen after restart", s.inputs.join() === "2026-11-07,2026-11-12", s);
+await t.page.keyboard.press("Escape"); // UX6: a complete range keeps the picker open; close before reopening
 // 365-day horizon
 await t.open(); let steps = 0; for (; steps < 30; steps++) { s = await t.state(); if (s.nextDis) break; await t.next(); }
 s = await t.state();
@@ -117,7 +120,8 @@ await t.close();
 // ================= 90-night boundary =================
 t = await make("2026-10-19T12:00:00");
 await t.open(); await t.goTo("2026-12-01"); await t.pick("2026-12-01"); await t.goTo("2027-03-01"); await t.pick("2027-03-01"); s = await t.state();
-ok("exactly 90 nights (Dec 1 -> Mar 1) accepted", !s.open && s.inputs.join() === "2026-12-01,2027-03-01", s);
+ok("exactly 90 nights (Dec 1 -> Mar 1) accepted (picker stays open; UX6)", s.open && s.inputs.join() === "2026-12-01,2027-03-01", s);
+await t.page.keyboard.press("Escape"); // UX6: close before reopening
 await t.open(); await t.goTo("2026-12-01"); await t.pick("2026-12-01"); await t.goTo("2027-03-02"); await t.pick("2027-03-02"); s = await t.state();
 ok("91 nights (Dec 1 -> Mar 2) rejected: stays open, new check-in Mar 2, notice shown, inputs unchanged", s.open && s.start === "2027-03-02" && s.end === null && /limited to 90 nights/.test(s.notice) && s.inputs.join() === "2026-12-01,2027-03-01", s);
 await t.next(); s = await t.state(); ok("notice cleared on navigation", s.notice === "", s);

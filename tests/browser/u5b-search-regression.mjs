@@ -158,10 +158,11 @@ ok("search picker opens with 2 months, 0 disabled future days", await page.evalu
 const pick = (i) => page.evaluate((i) => { const d = [...document.querySelectorAll("#mvCalendarMonths .mv-cal__day:not(.is-disabled)")]; d[i].click(); return d[i].dataset.date; }, i);
 const d1 = await pick(5); await page.waitForTimeout(50); const openAfterFirst = await page.evaluate(() => document.getElementById("mvCalendarModal").getAttribute("aria-hidden"));
 const d2 = await pick(8); await page.waitForTimeout(100);
-ok("picker closes after second pick", (await page.evaluate(() => document.getElementById("mvCalendarModal").getAttribute("aria-hidden"))) === "true", { d1, d2, openAfterFirst });
+ok("picker stays open after second pick (UX6; was: closes)", (await page.evaluate(() => document.getElementById("mvCalendarModal").getAttribute("aria-hidden"))) === "false", { d1, d2, openAfterFirst });
 ok("picker fills inputs", await page.evaluate(() => document.getElementById("mvCheckin").value && document.getElementById("mvCheckout").value > document.getElementById("mvCheckin").value));
 await page.evaluate(() => document.getElementById("mvDatesClear").click()); ok("clear dates resets", await page.evaluate(() => !document.getElementById("mvCheckin").value && document.getElementById("availabilityStatus").textContent === ""));
 // favorites
+await page.keyboard.press("Escape"); // UX6: the picker no longer closes itself
 ok("calendar overlay closed before favorites", await page.evaluate(() => getComputedStyle(document.getElementById("mvCalendarModal")).display === "none" || document.getElementById("mvCalendarModal").getAttribute("aria-hidden") !== "false")); await page.evaluate(() => document.querySelector('.mv-card[data-apartment-id="603564"] [data-heart]').click()); ok("favorite -> Saved (1)", (await $("mvShowSaved").textContent()) === "Saved (1)");
 await page.evaluate(() => document.getElementById("mvShowSaved").click()); s = await snap(); ok("Saved filter -> 603564 only", s.cards.length === 1 && s.cards[0].id === "603564", s);
 await page.evaluate(() => document.getElementById("mvShowAll").click()); s = await snap(); ok("Show all -> 2", s.cards.length === 2);
