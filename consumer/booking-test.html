@@ -439,6 +439,10 @@
         background:#f3f3f3;
     }
 
+    .mv-card__media{ display:block; }
+    .mv-card__link{ color: inherit; text-decoration: none; }
+    .mv-card__link:focus-visible{ outline: 2px solid #111; outline-offset: 2px; border-radius: 4px; }
+    .mv-card:focus-within{ box-shadow: 0 14px 34px rgba(0,0,0,.12); }
     .mv-card__body{ padding: 12px; }
     .mv-card__title{ font-weight: 750; margin: 0 0 6px 0; }
     .mv-card__meta{ font-size: 13px; opacity: .78; display:flex; justify-content:space-between; gap:10px; }
@@ -2147,14 +2151,17 @@
                          onerror="this.onerror=null;this.style.opacity=0.7;this.style.filter='grayscale(1)';">`
                 : `<div class="mv-card__noimg" role="img" aria-label="No photo available"></div>`;
             const subtitle = "Select dates to see price &amp; availability";
+            // UX7a: photo and title are real links to the dedicated property page (new tab / copy link work natively).
+            // The title link is the card's single keyboard/AT target; the photo link duplicates it for pointers only.
+            const href = esc(propertyCardHref(p));
             return `
             <div class="mv-card" data-id="${p.id}" data-property-id="${esc(pid)}" data-apartment-id="${p.id}" data-source="${esc(p.source || "")}">
                 <div class="mv-heart${saved ? " is-saved" : ""}" data-heart="1" data-id="${p.id}" data-property-id="${esc(pid)}" data-on="${saved ? 1 : 0}">
                     ${saved ? "♥" : "♡"}
                 </div>
-                ${image}
+                <a class="mv-card__media" href="${href}" data-card-link="1" tabindex="-1" aria-hidden="true">${image}</a>
                 <div class="mv-card__body">
-                    <div class="mv-card__title">${esc(p.name)}</div>
+                    <div class="mv-card__title"><a class="mv-card__link" href="${href}" data-card-link="1">${esc(p.name)}</a></div>
                     <div class="mv-card__meta">
                         <span>Sleeps ${p.sleeps}</span>
                         <span>${subtitle}</span>
@@ -2352,7 +2359,40 @@
     $("mvCheckin").addEventListener("input", updateSearchBtnState);
     $("mvCheckout").addEventListener("input", updateSearchBtnState);
 
+    // ---- UX7a: search card -> dedicated property page (UX1 routing; the legacy modal is no longer opened from cards) ----
+    function propertyCardHref(p) {
+        return `/property/${encodeURIComponent(String(p.id))}${searchQueryString()}`;
+    }
+    /** Keep card links current at the moment a native action (new tab, copy link, keyboard Enter) can read them. */
+    function refreshCardLink(target) {
+        const card = target && target.closest && target.closest(".mv-card");
+        if (!card) return;
+        const p = PROPERTIES.find((x) => String(x.id) === String(card.dataset.apartmentId));
+        if (p) card.querySelectorAll("a[data-card-link]").forEach((a) => { a.href = propertyCardHref(p); });
+    }
+    ["pointerdown", "focusin", "contextmenu"].forEach((type) => $results.addEventListener(type, (e) => refreshCardLink(e.target)));
+    function openPropertyFromCard(p) {
+        // The results entry is stamped with the current search query (as UX1's Back to results builds it) and its scroll,
+        // so Back (button or browser) returns to the same results at the same place.
+        history.replaceState({ ...(history.state || {}), mvView: "search", mvScrollY: window.scrollY }, "", "/" + searchQueryString());
+        history.pushState({ mvFrom: "search" }, "", propertyCardHref(p));
+        // The destination query IS the shared search state, so UX1's one-time URL->inputs step must not run here: it would
+        // re-run the search (clearing valid card prices and cancelling an in-flight search) for identical values.
+        routeQueryApplied = true;
+        applyRouteFromLocation({ focusTitle: true });
+        window.scrollTo(0, 0);
+    }
+
     $results.addEventListener("click", (e) => {
+        const cardLink = e.target.closest("a[data-card-link]");
+        if (cardLink && e.target.closest(".mv-card")) {
+            // Modified / non-primary clicks keep native link behaviour (new tab or window); plain clicks route in-document.
+            if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+            e.preventDefault();
+            const p = PROPERTIES.find((x) => String(x.id) === String(e.target.closest(".mv-card").dataset.apartmentId));
+            if (p) openPropertyFromCard(p);
+            return;
+        }
         const innerAction = e.target.closest("button, a");
         if (innerAction && e.target.closest(".mv-card")) {
             e.preventDefault();
@@ -2379,15 +2419,12 @@
 
         const card = e.target.closest(".mv-card");
         if (!card) return;
-        const id = String(card.dataset.propertyId || card.dataset.id);
-        const p = PROPERTIES.find(x => getPropertyId(x) === id || String(x.id) === id);
-        if (p) {
-            const apartmentId = card.dataset.apartmentId || p.id;
-            window.mvSelectedApartmentId = String(apartmentId);
-            document.querySelectorAll(".mv-selected").forEach((el) => el.classList.remove("mv-selected"));
-            card.classList.add("mv-selected");
-            openModal(p);
-        }
+        // UX7a: the rest of the card body follows the same route as its title link. Modified clicks on the body are left
+        // alone (only the real links open new tabs). The legacy N2 modal stays in the code but is not opened from cards.
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        if (String(window.getSelection && window.getSelection()).length) return; // the guest is selecting text, not navigating
+        const p = PROPERTIES.find((x) => String(x.id) === String(card.dataset.apartmentId));
+        if (p) openPropertyFromCard(p);
     });
 
     $modal.addEventListener("click", (e) => {

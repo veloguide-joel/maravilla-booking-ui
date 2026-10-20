@@ -5,12 +5,13 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY, PROXY, listings, calendarFor, quoteFor, overlaps, nightsOf, PNG_1x1 } from "../fixtures/pilots.mjs";
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://localhost:5500");
-  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); return; }
+  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); return; }
   res.writeHead(404); res.end("not found");
 });
 await new Promise((r) => server.listen(5500, "localhost", r));
@@ -20,8 +21,9 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const browser = await chromium.launch();
 const SHOTS = process.env.UX3_SHOTS || null;
 
-async function make({ vp = { width: 1280, height: 900 }, hooks = {} } = {}) {
+async function make({ vp = { width: 1280, height: 900 }, hooks = {}, legacyModal = false } = {}) {
   const ctx = await browser.newContext({ viewport: vp, reducedMotion: "reduce" });
+  if (legacyModal) await enableLegacyModal(ctx);
   const FIXED = new Date(TODAY + "T12:00:00").getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -206,24 +208,24 @@ await T.page.reload(); await T.page.waitForSelector("#mvPanel"); await T.settle(
 ok("7 refresh mid-check: fresh check completes normally", s.price === "5,760 MXN", s);
 await T.done();
 
-// ===== 8. Search/modal parity and isolation =====
-T = await make();
+// ===== 8. Search / LEGACY modal (test hook) parity and isolation =====
+T = await make({ legacyModal: true });
 await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2"); const panelVals = await T.panel();
 await T.page.click("#mvPropBack"); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden"));
 const searchState = await T.page.evaluate(() => ({ path: location.pathname + location.search, ci: document.getElementById("mvCheckin").value, co: document.getElementById("mvCheckout").value, g: document.getElementById("mvGuests").value }));
 ok("8 'Back to results' (the only route to search; UX4b removed the panel link) keeps the same dates and guests", searchState.path === "/?checkin=2026-12-20&checkout=2026-12-24&guests=2" && searchState.ci === "2026-12-20" && searchState.g === "2", searchState);
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText));
 const modal = await T.page.evaluate(() => ({ text: document.getElementById("mvHostawayQuote").innerText, sel: document.getElementById("mvHostawaySelection").innerText.split("\n")[0], path: location.pathname, selected: String(window.mvSelectedApartmentId) }));
-ok("8 modal still opens from the card (URL /), carries Dec 20 → Dec 24, and quotes the same figures as the panel", modal.path === "/" && /Dec 20 → Dec 24/.test(modal.sel) && modal.text.startsWith(panelVals.price) && modal.text.includes(`Standard price: ${panelVals.was}`) && modal.text.includes("−640 MXN"), { modal, panel: [panelVals.price, panelVals.was] });
+ok("8 LEGACY modal (test hook, URL /) carries Dec 20 → Dec 24 and quotes the same figures as the panel", modal.path === "/" && /Dec 20 → Dec 24/.test(modal.sel) && modal.text.startsWith(panelVals.price) && modal.text.includes(`Standard price: ${panelVals.was}`) && modal.text.includes("−640 MXN"), { modal, panel: [panelVals.price, panelVals.was] });
 // property page while the modal state exists: no duplicate ids, modal state untouched by the panel
 await T.page.keyboard.press("Escape");
 await T.page.evaluate(() => { history.pushState({ mvFrom: "search" }, "", "/property/603564?checkin=2026-12-20&checkout=2026-12-24&guests=2"); window.dispatchEvent(new PopStateEvent("popstate", { state: { mvFrom: "search" } })); });
 await T.settle(); s = await T.panel();
 ok("8 with the modal's state built and the panel rendered: no duplicate ids; mvSelectedApartmentId still the modal's (603566-slug), not changed by the panel", s.dupIds.length === 0 && String(s.selectedApartment) === modal.selected && s.price === "7,920 MXN", { d: s.dupIds, sel: s.selectedApartment, m: modal.selected });
 await T.page.goBack(); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden"));
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText));
 ok("8 after visiting the panel, the modal still quotes 5,760 (no shared-state interference)", /^5,760 MXN estimated direct total/.test(await T.page.evaluate(() => document.getElementById("mvHostawayQuote").innerText)));

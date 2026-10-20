@@ -23,6 +23,7 @@ Node ≥ 20. No network is needed: every proxy call is intercepted and answered 
 | `unit/stay-selection.test.mjs` | 19 cases | owner's occupancy matrix, 90-night cap, unknown nights |
 | `unit/quote-parse.test.mjs` | 25 malformed + live shapes | three quote states, breakdown sum, MXN formatting |
 | `unit/direct-estimate.test.mjs` | 15 malformed | D4 consistency checks, estimate_unavailable, no direct on unavailable |
+| `unit/legacy-modal-hook.test.mjs` | 4 | UX7a isolation guards for the test-only legacy modal entry: committed page has no hook/cookie/test switch; hooked copy = page + hook only; served only with the cookie; never injected twice |
 | `browser/n1-search-picker.mjs` | 56 | search picker month navigation, 365-day horizon, 90-night guard, keyboard, mobile |
 | `browser/n2-modal-calendar.mjs` | 85 | modal navigation, fresh windows, fail-closed, edit/clear, carry-over, Dec 24–31 reservation, highlighting, stale protection |
 | `browser/d4-savings-display.mjs` | 58 | six pilot prices, LOS stacking, malformed `direct`, no savings on unavailable/unconfirmed, stale protection, mobile |
@@ -35,12 +36,30 @@ Node ≥ 20. No network is needed: every proxy call is intercepted and answered 
 | `browser/ux4b-date-editor.mjs` | 97 | property-page date editor (second calendar host): open from either field, no-date URL, draft vs committed (no URL/price/quote change until Apply), Escape/Close/backdrop discard + focus return, edit one end, full replacement, explicit Clear+Apply, replaceState + reload + Back/Forward, 365-day/90-night limits, month/year boundaries, blocked/unconfirmed/incomplete fail-closed, Dec 24–31 reservation, weekly/monthly D4 after Apply, delayed calendar/quote races, closed-editor and property-switch races, modal parity + no duplicate ids, desktop anchoring, 390/320 sheet, keyboard/focus trap, GET-only network |
 | `browser/ux5-guest-editing.mjs` | 51 | guest selector in the property panel: options 1..capacity, 1↔2 repricing through the UX3 pipeline, same-value no-op, over-capacity URL flagged + correctable on the page, forged values rejected, URL guest params (UX1 all-or-nothing rule), no-date changes, date↔guest ordering, date-editor isolation, unavailable/unconfirmed + Retry, out-of-order + rapid changes, leaving / property switch mid-quote, replaceState + reload + Back/Forward, modal parity, layout 1280/390/320, keyboard/focus/accessible name, GET-only network |
 | `browser/ux6-search-calendar.mjs` | 50 | homepage search picker: stays open after check-out with the range painted, footer summary + Clear dates / Check availability (disabled until complete), footer search exactly once (also on triple-click and while the same search runs), external button unchanged, revising, Escape/Close/outside keep dates without searching, stale results cleared + 'Dates changed' notice, same-range re-pick keeps results, unfinished revision keeps the last complete range, Clear dates, month/year boundaries, 90-night/365-day limits, unavailable/unconfirmed results, overlapping searches, 390/320 sticky footer, keyboard/focus, GET-only network |
+| `browser/ux7a-card-navigation.mjs` | 64 | **guest journey on the unmodified page** (no legacy cookie; asserts served bytes = committed file, no hook): card photo/title real links (one tab stop, aria-hidden photo link, no nested controls), title/photo/body clicks → `/property/:id` with dates + guests, heart independent, Saved filter/favorites/dates preserved, Ctrl/Shift/middle-click new tabs, independent property-page validation (card price never reused), date + guest editing after arrival, Back to results / Back / Forward / reload / direct URLs, Dec 24–31 reservation, stale cross-view answers, keyboard, 390/320 tap + scroll restoration, UX6 picker → card → property journey, GET-only network |
 
 Unit tests import the real functions: `lib/page-source.mjs` extracts named declarations from the page's
 inline script at test time (`extract([...names])`); a renamed or removed function fails the suite instead of
 silently testing a stale copy. Browser harnesses load the committed page in Chromium with a fixed clock
 (`fixtures/pilots.mjs` → `TODAY = 2026-10-19`) and deterministic proxy fixtures, including the real
 603566 Dec 24–31 reservation and the 603564 Jan 7–Mar 2 2027 block.
+
+## Legacy modal suites (UX7a)
+Since UX7a, search cards open the dedicated property page; nothing in the application opens the old N2 modal any more.
+Its calendar/quote engine (shared with the property-page editor through the UX4a calendar host) stays under regression
+through a **test-only** entry, `lib/modal-entry.mjs`:
+- The local test server keeps the committed page in memory. Only for a browser context carrying the cookie
+  `mv_test_legacy_modal=1` (set by `enableLegacyModal(ctx)`, scoped to `localhost:5500`) does it serve a copy with a
+  small block inserted just before the script's closing `})();`. That block is the pre-UX7a card-click branch,
+  verbatim: it sets `mvSelectedApartmentId`, moves `.mv-selected` and calls the original `openModal(p)`. It makes no
+  requests or writes of its own.
+- The committed page never contains it (`unit/legacy-modal-hook.test.mjs`, the UX7a suite, and the live preview check).
+  `tests/` is excluded from deployments by `.vercelignore`.
+- **Legacy-modal coverage** (hooked contexts): `ux4a-calendar-parity` (all), `n2-modal-calendar` (all),
+  `d4-savings-display` (all), `u5b-search-regression` (all), and the sections labelled "LEGACY modal (test hook)" in
+  `n1` (modal), `ux1` (E), `ux2b` (13–15), `ux2c` (13–14), `ux3` (8), `ux4b` (6) and `ux5` (8).
+- **Guest-facing coverage** (unmodified page): `ux7a-card-navigation`, `ux6`, and every other section of
+  `n1`/`ux1`–`ux5`.
 
 ## UX4a parity fixture
 `fixtures/ux4a-baseline-ccdefda.json` is frozen evidence recorded from `consumer/booking-test.html` at commit `ccdefda` (pre-refactor). Do not regenerate it from a refactored page; a deliberate behaviour change needs owner approval and a new, separately recorded baseline.

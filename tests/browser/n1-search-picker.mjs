@@ -3,9 +3,10 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
-const server = http.createServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); });
+const server = http.createServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); });
 await new Promise((r) => server.listen(5500, "localhost", r));
 const PROXY = "https://maravilla-smoobu-proxy-git-dev-joel-goralskis-projects.vercel.app";
 const listings = { ok: true, checkedAt: "2026-10-19T00:00:00Z", listings: [
@@ -17,8 +18,9 @@ const results = {}; let failed = 0;
 const ok = (name, cond, detail) => { results[name] = cond ? "PASS" : "FAIL " + JSON.stringify(detail); if (!cond) { failed++; console.log("FAIL", name, JSON.stringify(detail)); } };
 const browser = await chromium.launch();
 
-async function make(nowIso, vp = { width: 1280, height: 900 }) {
+async function make(nowIso, vp = { width: 1280, height: 900 }, { legacyModal = false } = {}) {
   const ctx = await browser.newContext({ viewport: vp });
+  if (legacyModal) await enableLegacyModal(ctx);
   const FIXED = new Date(nowIso).getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -159,10 +161,10 @@ await t.page.keyboard.press("Escape"); ok("Escape while closed is harmless", tru
 ok("keyboard run made no API calls", t.apiLog.filter((x) => !x.includes("/listings")).length === 0, t.apiLog);
 await t.close();
 
-// ================= Modal calendar, favorites, filters untouched =================
-t = await make("2026-10-19T12:00:00");
-await t.page.click(".mv-card"); await t.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month", { timeout: 10000 });
-ok("property modal calendar (N2 contract): 2 months, own Prev/Next, one window-scoped calendar call, search picker nav intact", await t.page.evaluate(() => document.querySelectorAll("#mvHostawayCalendarMonths .mv-cal__month").length === 2 && !!document.querySelector("#mvHcalPrev") && !!document.querySelector("#mvHcalNext")) && t.apiLog.filter((x) => x.includes("/calendar")).length === 1);
+// ================= LEGACY modal calendar (test hook), favorites, filters untouched =================
+t = await make("2026-10-19T12:00:00", undefined, { legacyModal: true });
+await openLegacyModal(t.page, await t.page.evaluate(() => document.querySelector(".mv-card").dataset.apartmentId)); /* UX7a: was a click on the first card */ await t.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month", { timeout: 10000 });
+ok("LEGACY modal (test hook) calendar (N2 contract): 2 months, own Prev/Next, one window-scoped calendar call, search picker nav intact", await t.page.evaluate(() => document.querySelectorAll("#mvHostawayCalendarMonths .mv-cal__month").length === 2 && !!document.querySelector("#mvHcalPrev") && !!document.querySelector("#mvHcalNext")) && t.apiLog.filter((x) => x.includes("/calendar")).length === 1);
 await t.close();
 t = await make("2026-10-19T12:00:00");
 const favBefore = await t.page.evaluate(() => document.body.innerText.match(/Saved \((\d+)\)/)?.[1]);

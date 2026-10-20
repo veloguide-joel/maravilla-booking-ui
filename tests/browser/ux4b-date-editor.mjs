@@ -5,12 +5,13 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY, PROXY, listings, calendarFor, quoteFor, overlaps, nightsOf, PNG_1x1 } from "../fixtures/pilots.mjs";
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://localhost:5500");
-  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); return; }
+  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); return; }
   res.writeHead(404); res.end("not found");
 });
 await new Promise((r) => server.listen(5500, "localhost", r));
@@ -21,8 +22,9 @@ const browser = await chromium.launch();
 const SHOTS = process.env.UX4B_SHOTS || null;
 const sl = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function make({ vp = { width: 1280, height: 900 }, hooks = {} } = {}) {
+async function make({ vp = { width: 1280, height: 900 }, hooks = {}, legacyModal = false } = {}) {
   const ctx = await browser.newContext({ viewport: vp, reducedMotion: "reduce" });
+  if (legacyModal) await enableLegacyModal(ctx);
   const FIXED = new Date(TODAY + "T12:00:00").getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -263,9 +265,9 @@ const hidden = await T.page.evaluate(() => ({ app: !document.getElementById("mv-
 ok("5 Apply then Back to results before the quote answers: results shown with the committed dates in the URL; the late quote does not price the hidden panel", hidden.app && hidden.price === null && hidden.url === "/?checkin=2026-12-20&checkout=2026-12-24&guests=2", hidden);
 await T.done();
 
-// ===== 6. Reload, Back/Forward, modal parity, duplicate ids =====
-T = await make(); await T.go("/"); await T.page.evaluate(() => { for (const [id, v] of [["mvCheckin", "2026-12-20"], ["mvCheckout", "2026-12-24"]]) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("change", { bubbles: true })); } });
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
+// ===== 6. Reload, Back/Forward, LEGACY modal (test hook) parity, duplicate ids =====
+T = await make({ legacyModal: true }); await T.go("/"); await T.page.evaluate(() => { for (const [id, v] of [["mvCheckin", "2026-12-20"], ["mvCheckout", "2026-12-24"]]) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("change", { bubbles: true })); } });
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText));
 const modalBefore = await T.page.evaluate(() => ({ q: document.getElementById("mvHostawayQuote").innerText.split("\n")[0], sel: document.getElementById("mvHostawaySelection").innerText.split("\n")[0], id: String(window.mvSelectedApartmentId) }));
 await T.page.keyboard.press("Escape");
@@ -285,7 +287,7 @@ ok("6 Forward returns to the property with the last applied dates", pd.checkin =
 await T.open("checkin"); await T.page.goBack(); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden")); e = await T.ed();
 ok("6 Back with the editor open closes it and releases scroll/inert", !e.open && !e.locked && !e.inert, e);
 // original modal still works, independent of the editor's past drafts
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total|could not/.test(document.getElementById("mvHostawayQuote").innerText));
 const modalAfter = await T.page.evaluate(() => ({ q: document.getElementById("mvHostawayQuote").innerText.split("\n")[0], sel: document.getElementById("mvHostawaySelection").innerText.split("\n")[0], pill: document.getElementById("mvModalDatesPill").textContent }));
 ok("6 search modal after editor use: seeded from the committed search dates (Dec 21 → Dec 23) and quotes 2,880 — N2 behaviour intact", /Dec 21 → Dec 23/.test(modalAfter.sel) && /^2,880 MXN estimated direct total/.test(modalAfter.q) && modalBefore.q.startsWith("5,760"), { before: modalBefore, after: modalAfter });

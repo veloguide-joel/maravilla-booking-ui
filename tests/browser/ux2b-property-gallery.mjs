@@ -5,12 +5,13 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY, PROXY, listings as baseListings, calendarFor, quoteFor, overlaps, nightsOf, PNG_1x1 } from "../fixtures/pilots.mjs";
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://localhost:5500");
-  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); return; }
+  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); return; }
   res.writeHead(404); res.end("not found");
 });
 await new Promise((r) => server.listen(5500, "localhost", r));
@@ -25,8 +26,9 @@ const pilot = (idx, urls, extra = {}) => ({ ...baseListings.listings[idx], img: 
 const PILOTS = { ok: true, checkedAt: "2026-10-19T00:00:00Z", listings: [pilot(0, A), pilot(1, B)] };
 const withImages = (img, images) => ({ ok: true, checkedAt: "x", listings: [{ ...baseListings.listings[0], img, images }, pilot(1, B)] });
 
-async function make({ vp = { width: 1280, height: 900 }, body = PILOTS, reducedMotion = "reduce" } = {}) {
+async function make({ vp = { width: 1280, height: 900 }, body = PILOTS, reducedMotion = "reduce", legacyModal = false } = {}) {
   const ctx = await browser.newContext({ viewport: vp, reducedMotion, hasTouch: vp.width < 768 });
+  if (legacyModal) await enableLegacyModal(ctx);
   const FIXED = new Date(TODAY + "T12:00:00").getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -259,16 +261,16 @@ ok("12 Back again: property page with a fresh gallery, viewer closed, focus on t
 ok("11/12 no page errors", T.errors.length === 0, T.errors);
 await T.done();
 
-// ===== 13-15. Search page, cards, modal, booking flow and network unchanged =====
-T = await make(); await T.go("/"); g = await T.gal();
+// ===== 13-15. Search page, cards, LEGACY modal (test hook), booking flow and network =====
+T = await make({ legacyModal: true }); await T.go("/"); g = await T.gal();
 const cards = await T.page.evaluate(() => [...document.querySelectorAll(".mv-card")].map((c) => ({ id: c.dataset.apartmentId, img: c.querySelector("img")?.getAttribute("src") || null })));
 ok("13 search page: 2 cards with the primary image only; no gallery or viewer visible", same(cards, [{ id: "603564", img: A[0] }, { id: "603566", img: B[0] }]) && !g.present && !g.viewerOpen, cards);
 ok("5 search page loads only the two card images (gallery photos untouched)", T.imgs.every((u) => u === A[0] || u === B[0]), T.imgs);
 await T.page.evaluate(() => { for (const [id, v] of [["mvCheckin", "2026-12-20"], ["mvCheckout", "2026-12-24"]]) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("change", { bubbles: true })); } });
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 const modal = await T.page.evaluate(() => ({ open: document.getElementById("mvModal").getAttribute("aria-hidden") === "false", path: location.pathname, img: document.querySelector("#mvModalContent img")?.getAttribute("src") || null, titles: [...document.querySelectorAll("#mvHostawayCalendarMonths .mv-cal__title")].map((t) => t.textContent), sel: document.getElementById("mvHostawaySelection").innerText.split("\n")[0], gallery: !!document.querySelector("#mvModal .mv-gal") }));
-ok("13 card click still opens the ORIGINAL modal (same image, N2 carry-over, URL unchanged, no gallery inside)", modal.open && modal.path === "/" && modal.img === B[0] && same(modal.titles, ["December 2026", "January 2027"]) && /Dec 20 → Dec 24/.test(modal.sel) && !modal.gallery, modal);
+ok("13 LEGACY modal (test hook): same image, N2 carry-over, URL unchanged, no gallery inside", modal.open && modal.path === "/" && modal.img === B[0] && same(modal.titles, ["December 2026", "January 2027"]) && /Dec 20 → Dec 24/.test(modal.sel) && !modal.gallery, modal);
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText));
 ok("14 D4 quote in the modal unchanged (6,400 -> 5,760 estimated direct total)", /^5,760 MXN estimated direct total/.test(await T.page.evaluate(() => document.getElementById("mvHostawayQuote").innerText)));
 await T.page.keyboard.press("Escape"); await T.page.waitForTimeout(80);
@@ -279,7 +281,7 @@ await T.page.evaluate(() => { history.pushState({ mvFrom: "search" }, "", "/prop
 await T.page.click("#mvPropGalleryAll"); await T.page.keyboard.press("ArrowRight"); await T.page.keyboard.press("Escape");
 g = await T.gal(); ok("6/13 viewer + booking modal never open together; no duplicate ids with both views built", !g.modalOpen && !g.viewerOpen && g.dupIds.length === 0, g);
 await T.page.click("#mvPropBack"); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden"));
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.click("#mvHostawayQuoteBtn").catch(() => {}); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText), null, { timeout: 8000 }).catch(() => {});
 ok("14 after using the gallery, the modal quote still works (5,760)", /^5,760 MXN estimated direct total/.test(await T.page.evaluate(() => document.getElementById("mvHostawayQuote").innerText)));
 ok("15 network: only the proxy (listings/calendar/quote) and image hosts; nothing else", T.other.length === 0 && T.api.every((a) => /^\/api\/booking\/(listings|calendar|quote)(\?|$)/.test(a)), { other: T.other, api: T.api });

@@ -5,12 +5,13 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY, PROXY, listings, calendarFor, quoteFor, overlaps, nightsOf, PNG_1x1 } from "../fixtures/pilots.mjs";
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://localhost:5500");
-  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); return; }
+  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); return; }
   res.writeHead(404); res.end("not found");
 });
 await new Promise((r) => server.listen(5500, "localhost", r));
@@ -22,8 +23,9 @@ const SHOTS = process.env.UX5_SHOTS || null;
 const sl = (ms) => new Promise((r) => setTimeout(r, ms));
 const UNAVAILABLE_DIRECT = (b) => { b.direct = { estimate: true, status: "estimate_unavailable", reason: "TEST_MARKER", currency: "MXN" }; };
 
-async function make({ vp = { width: 1280, height: 900 }, hooks = {} } = {}) {
+async function make({ vp = { width: 1280, height: 900 }, hooks = {}, legacyModal = false } = {}) {
   const ctx = await browser.newContext({ viewport: vp, reducedMotion: "reduce" });
+  if (legacyModal) await enableLegacyModal(ctx);
   const FIXED = new Date(TODAY + "T12:00:00").getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -194,8 +196,8 @@ await T.page.evaluate(() => { history.pushState({}, "", "/property/603564"); win
 ok("7 switching property while 603566's quote is pending: 603564 shows its own price for the committed stay (1 guest, 3 nights 6,600 → 5,940)", p.price === "5,940 MXN" && p.was === "6,600 MXN" && p.guests === "1 guest" && (await T.page.evaluate(() => document.querySelector("#mvPropertyView h1").textContent)) === "Hacienda 5 De Mayo", p);
 await T.done();
 
-// ===== 8. Reload, Back/Forward, modal parity =====
-T = await make();
+// ===== 8. Reload, Back/Forward, LEGACY modal (test hook) parity =====
+T = await make({ legacyModal: true });
 await T.go("/"); await T.page.evaluate(() => { for (const [id, v] of [["mvCheckin", "2026-12-20"], ["mvCheckout", "2026-12-24"]]) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("change", { bubbles: true })); } });
 await T.page.evaluate(() => { history.pushState({ mvFrom: "search" }, "", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2"); window.dispatchEvent(new PopStateEvent("popstate", { state: { mvFrom: "search" } })); }); await T.settle();
 const h8 = (await T.panel()).hist; await T.pick(1); await T.pick(2); await T.pick(1); p = await T.panel();
@@ -207,7 +209,7 @@ ok("8 Back goes to the previous page (search), not through guest changes", b8 ==
 await T.page.goForward(); await T.page.waitForSelector("#mvPanel"); await T.settle(); p = await T.panel();
 ok("8 Forward returns to the property with guests=1", p.guests === "1 guest" && p.url.endsWith("guests=1"), p);
 await T.page.click("#mvPropBack"); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden"));
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText));
 const mq = await T.page.evaluate(() => document.getElementById("mvHostawayQuote").innerText);
 ok("8 search modal (N2) after property-page guest edits: same committed guests (1) and dates, same 5,760 estimate", /^5,760 MXN estimated direct total/.test(mq) && /4 nights · 1 guest/.test(mq), mq.slice(0, 160));

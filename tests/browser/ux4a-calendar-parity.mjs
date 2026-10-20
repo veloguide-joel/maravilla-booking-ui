@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY, PROXY, listings, calendarFor, quoteFor, overlaps, nightsOf, PNG_1x1 } from "../fixtures/pilots.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -21,7 +22,7 @@ const recordTo = process.argv.includes("--record") ? process.argv[process.argv.i
 const PAGE = readFileSync(PAGE_PATH, "utf8");
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://localhost:5500");
-  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); return; }
+  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); return; }
   res.writeHead(404); res.end("not found");
 });
 await new Promise((r) => server.listen(5500, "localhost", r));
@@ -30,6 +31,7 @@ const browser = await chromium.launch();
 const hooks = { calendar: null, quote: null };
 async function make(vp = { width: 1280, height: 900 }) {
   const ctx = await browser.newContext({ viewport: vp, reducedMotion: "reduce" });
+  await enableLegacyModal(ctx); // UX7a: frozen-parity entry is the test hook (verbatim pre-UX7a card branch); baseline untouched
   const FIXED = new Date(TODAY + "T12:00:00").getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -104,7 +106,7 @@ async function step(name, fn, { wait = true } = {}) {
 }
 const click = (sel) => T.page.click(sel, { force: true, timeout: 8000 }); // force: a disabled nav button must simply do nothing (real browsers drop the click)
 const day = (iso) => `#mvHostawayCalendarMonths .mv-cal__day[data-date="${iso}"]`;
-const openCard = async (id) => { await click(`.mv-card[data-apartment-id="${id}"] .mv-card__title`); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); };
+const openCard = async (id) => { await openLegacyModal(T.page, id); /* UX7a: was a card-title click */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); };
 const setSearch = (ci, co, g) => T.page.evaluate(([ci, co, g]) => { for (const [id, v] of [["mvCheckin", ci], ["mvCheckout", co]]) { const el = document.getElementById(id); el.value = v || ""; el.dispatchEvent(new Event("change", { bubbles: true })); } if (g) { const el = document.getElementById("mvGuests"); el.value = String(g); el.dispatchEvent(new Event("change", { bubbles: true })); } }, [ci, co, g]);
 const selBtn = (label) => T.page.evaluate((label) => { const b = [...document.querySelectorAll("#mvHostawaySelection button")].find((x) => x.textContent.trim() === label); if (!b) throw new Error("no button " + label); b.click(); }, label);
 const goToMonth = async (title) => { for (let i = 0; i < 30; i++) { const titles = await T.page.evaluate(() => [...document.querySelectorAll("#mvHostawayCalendarMonths .mv-cal__title")].map((x) => x.textContent)); if (titles[0] === title) return; const want = new Date(title), have = new Date(titles[0]); await T.page.evaluate((d) => document.getElementById(d).click(), want > have ? "mvHcalNext" : "mvHcalPrev"); await sl(40); } throw new Error("month not reached " + title); };

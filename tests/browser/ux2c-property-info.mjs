@@ -5,12 +5,13 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY, PROXY, listings as baseListings, calendarFor, quoteFor, overlaps, nightsOf, PNG_1x1 } from "../fixtures/pilots.mjs";
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://localhost:5500");
-  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); return; }
+  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); return; }
   res.writeHead(404); res.end("not found");
 });
 await new Promise((r) => server.listen(5500, "localhost", r));
@@ -32,8 +33,9 @@ const PILOTS = { ok: true, checkedAt: "2026-10-19T00:00:00Z", listings: [
 ] };
 const variant = (extra) => ({ ...PILOTS, listings: [{ ...PILOTS.listings[0], ...extra }, PILOTS.listings[1]] });
 
-async function make({ vp = { width: 1280, height: 900 }, body = PILOTS } = {}) {
+async function make({ vp = { width: 1280, height: 900 }, body = PILOTS, legacyModal = false } = {}) {
   const ctx = await browser.newContext({ viewport: vp, reducedMotion: "reduce" });
+  if (legacyModal) await enableLegacyModal(ctx);
   const FIXED = new Date(TODAY + "T12:00:00").getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -199,20 +201,20 @@ ok("12 browser Forward: results", s.appVisible && !s.propVisible, s);
 ok("12 no page errors", T.errors.length === 0, T.errors);
 await T.done();
 
-// ===== 13-14. Search, modal, prices, network =====
-T = await make(); await T.go("/");
+// ===== 13-14. Search, LEGACY modal (test hook), prices, network =====
+T = await make({ legacyModal: true }); await T.go("/");
 const cards = await T.page.evaluate(() => [...document.querySelectorAll(".mv-card")].map((c) => ({ id: c.dataset.apartmentId, text: c.innerText })));
 ok("13 search cards unchanged: 2 cards, no amenities or times added to them", cards.length === 2 && cards.every((c) => !/Swimming pool|Check-in|Air conditioning/.test(c.text)), cards);
 await T.page.evaluate(() => { for (const [id, v] of [["mvCheckin", "2026-12-20"], ["mvCheckout", "2026-12-24"]]) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("change", { bubbles: true })); } });
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 const modal = await T.page.evaluate(() => ({ open: document.getElementById("mvModal").getAttribute("aria-hidden") === "false", path: location.pathname, titles: [...document.querySelectorAll("#mvHostawayCalendarMonths .mv-cal__title")].map((t) => t.textContent), sel: document.getElementById("mvHostawaySelection").innerText.split("\n")[0], amen: /Swimming pool|Amenities/.test(document.getElementById("mvModalContent").innerText) }));
-ok("13 card click opens the original modal (N2 carry-over Dec 20 → Dec 24, URL unchanged, no info area inside)", modal.open && modal.path === "/" && same(modal.titles, ["December 2026", "January 2027"]) && /Dec 20 → Dec 24/.test(modal.sel) && !modal.amen, modal);
+ok("13 LEGACY modal (test hook): N2 carry-over Dec 20 → Dec 24, URL unchanged, no info area inside", modal.open && modal.path === "/" && same(modal.titles, ["December 2026", "January 2027"]) && /Dec 20 → Dec 24/.test(modal.sel) && !modal.amen, modal);
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText));
 ok("13 D4 quote unchanged (6,400 -> 5,760 estimated direct total)", /^5,760 MXN estimated direct total/.test(await T.page.evaluate(() => document.getElementById("mvHostawayQuote").innerText)));
 await T.page.keyboard.press("Escape"); await T.page.waitForTimeout(80);
 await T.page.evaluate(() => { for (const [id, v] of [["mvCheckin", "2026-12-24"], ["mvCheckout", "2026-12-31"]]) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("change", { bubbles: true })); } });
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 ok("13 Dec 24 → 31 on 603566 still refused in the modal (reservation boundary)", /not available|unavailable|booked/i.test(await T.page.evaluate(() => document.getElementById("mvHostawaySelection").innerText)));
 await T.page.keyboard.press("Escape");

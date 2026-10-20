@@ -4,11 +4,12 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY } from "../fixtures/pilots.mjs";
 import assert from "node:assert/strict";
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
-const server = http.createServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); });
+const server = http.createServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); });
 await new Promise((r) => server.listen(5500, "localhost", r));
 const PROXY = process.env.PROXY_ORIGIN || "https://maravilla-smoobu-proxy-git-dev-joel-goralskis-projects.vercel.app";
 
@@ -35,6 +36,7 @@ let quoteOverride = null; // (params) => {status, body, delayMs} | null
 let apiLog = [];
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+await enableLegacyModal(ctx); // LEGACY-MODAL suite: the N2 modal is reached only through the test hook since UX7a
 const FIXED = new Date(`${TODAY}T12:00:00`).getTime();
 await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
 const page = await ctx.newPage();
@@ -112,7 +114,7 @@ quoteOverride = null;
 await setGuests(1); s = await snap();
 ok("H guest change clears prices", s.cards.every((c) => c.sub === "Select dates to see price & availability") && s.status === "", s);
 // --- U2/U3 modal ---
-const openCard = async (id) => { await page.locator(`.mv-card[data-apartment-id="${id}"] .mv-card__title`).click(); await page.waitForSelector(".mv-cal__day--hostaway"); await page.waitForTimeout(150); };
+const openCard = async (id) => { await openLegacyModal(page, id); /* UX7a: was a card-title click */ await page.waitForSelector(".mv-cal__day--hostaway"); await page.waitForTimeout(150); };
 const cell = (d) => page.locator(`.mv-cal__day--hostaway[data-date="${d}"]`);
 const sel = async () => { await page.waitForFunction(() => !document.getElementById("mvHostawaySelection").innerText.includes("checking availability"), null, { timeout: 8000 }); return $("mvHostawaySelection").innerText(); }; // N2: the verdict follows a fresh stay check
 await setDate("mvCheckin", ""); await setDate("mvCheckout", ""); // N2: a guest without search dates (with dates the modal opens on that month)

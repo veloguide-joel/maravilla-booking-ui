@@ -3,10 +3,11 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY, PROXY, listings, BLOCKS, RATE, dayMs, nightsOf, addD, overlaps, quoteFor } from "../fixtures/pilots.mjs";
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
-const server = http.createServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); });
+const server = http.createServer((req, res) => { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); });
 await new Promise((r) => server.listen(5500, "localhost", r));
 const results = {}; let failed = 0;
 const ok = (name, cond, detail) => { results[name] = cond ? "PASS" : "FAIL " + JSON.stringify(detail); if (!cond) { failed++; console.log("FAIL", name, JSON.stringify(detail)); } };
@@ -14,6 +15,7 @@ const browser = await chromium.launch();
 
 async function make({ vp = { width: 1280, height: 900 }, now = TODAY } = {}) {
   const ctx = await browser.newContext({ viewport: vp });
+  await enableLegacyModal(ctx); // LEGACY-MODAL suite: the N2 modal is reached only through the test hook since UX7a
   const FIXED = new Date(now + "T12:00:00").getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -53,7 +55,7 @@ async function make({ vp = { width: 1280, height: 900 }, now = TODAY } = {}) {
   await page.waitForSelector(".mv-card", { timeout: 15000 });
   T.clearLogs = () => { T.calLog.length = 0; T.quoteLog.length = 0; };
   T.setDates = (a, b) => page.evaluate(([a, b]) => { for (const [id, v] of [["mvCheckin", a], ["mvCheckout", b]]) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); } }, [a, b]);
-  T.open = async (id) => { await page.locator(`.mv-card[data-apartment-id="${id}"] .mv-card__title`).click(); await page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); };
+  T.open = async (id) => { await openLegacyModal(page, id); /* UX7a: was a card-title click */ await page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month"); };
   T.closeModal = async () => { await page.evaluate(() => document.querySelector("#mvModal .mv-modal__backdrop").click()); await page.waitForTimeout(60); };
   T.settle = (ms = 8000) => page.waitForFunction(() => { const st = document.getElementById("mvHostawayCalendarStatus"), sm = document.getElementById("mvHostawaySelection"); return st && sm && !/Loading live calendar/.test(st.textContent) && !/checking availability/.test(sm.innerText); }, null, { timeout: ms });
   T.st = () => page.evaluate(() => { const q = (s) => document.querySelector(s); const cells = {}; document.querySelectorAll("#mvHostawayCalendarMonths .mv-cal__day--hostaway").forEach((c) => { cells[c.dataset.date] = c.dataset.state; });

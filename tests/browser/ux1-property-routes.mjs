@@ -3,12 +3,13 @@ import { chromium } from "playwright";
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { PAGE_PATH } from "../lib/page-source.mjs";
+import { htmlFor, enableLegacyModal, openLegacyModal } from "../lib/modal-entry.mjs"; // UX7a: test-only legacy modal entry (see lib)
 import { TODAY, PROXY, listings, calendarFor, quoteFor, overlaps, nightsOf, PNG_1x1 } from "../fixtures/pilots.mjs";
 
 const PAGE = readFileSync(PAGE_PATH, "utf8");
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://localhost:5500");
-  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE); return; }
+  if (u.pathname === "/consumer/booking-test.html" || u.pathname === "/" || /^\/property\/[^/]+\/?$/.test(u.pathname)) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(htmlFor(req, PAGE)); return; }
   res.writeHead(404); res.end("not found");
 });
 await new Promise((r) => server.listen(5500, "localhost", r));
@@ -17,8 +18,9 @@ const ok = (name, cond, detail) => { results[name] = cond ? "PASS" : "FAIL " + J
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const browser = await chromium.launch();
 
-async function make({ vp = { width: 1280, height: 900 }, listingsHook = null } = {}) {
+async function make({ vp = { width: 1280, height: 900 }, listingsHook = null, legacyModal = false } = {}) {
   const ctx = await browser.newContext({ viewport: vp });
+  if (legacyModal) await enableLegacyModal(ctx);
   const FIXED = new Date(TODAY + "T12:00:00").getTime();
   await ctx.addInitScript((FIXED) => { const D = Date; class M extends D { constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); } static now() { return FIXED; } } window.Date = M; }, FIXED);
   const page = await ctx.newPage();
@@ -117,21 +119,21 @@ await T.done(); T = await make(); await T.go("/property/603564"); await T.page.c
 ok("D Back to results from a cold property load: search page with current guests in the URL", s.appVisible && s.path === "/?guests=2", s.path);
 await T.done();
 
-// ===== E. Existing search/modal flow unchanged =====
-T = await make();
+// ===== E. LEGACY modal flow (test hook; since UX7a cards open property pages — see ux7a suite) =====
+T = await make({ legacyModal: true });
 await T.go("/"); s = await T.state();
 ok("E / shows the search page; property view hidden; no booking ids duplicated", s.appVisible && !s.propVisible && s.dupIds.length === 0, s);
 await T.page.evaluate(() => { for (const [id, v] of [["mvCheckin", "2026-12-20"], ["mvCheckout", "2026-12-24"]]) { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event("change", { bubbles: true })); } });
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 s = await T.state();
 const modal = await T.page.evaluate(() => ({ titles: [...document.querySelectorAll("#mvHostawayCalendarMonths .mv-cal__title")].map((t) => t.textContent), sel: document.getElementById("mvHostawaySelection").innerText.split("\n")[0], check: !!document.getElementById("mvHostawayQuoteBtn") }));
-ok("E card click still opens the ORIGINAL modal (N2 carry-over works, URL unchanged)", s.modalOpen && s.path === "/" && same(modal.titles, ["December 2026", "January 2027"]) && /Dec 20 → Dec 24/.test(modal.sel) && modal.check, { s: s.path, modal });
+ok("E LEGACY modal (test hook): N2 carry-over works, URL unchanged", s.modalOpen && s.path === "/" && same(modal.titles, ["December 2026", "January 2027"]) && /Dec 20 → Dec 24/.test(modal.sel) && modal.check, { s: s.path, modal });
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText));
 ok("E D4 pricing in the modal unchanged (6,400 -> 5,760)", /^5,760 MXN estimated direct total/.test(await T.page.evaluate(() => document.getElementById("mvHostawayQuote").innerText)));
 await T.page.keyboard.press("Escape"); await T.page.waitForTimeout(80); s = await T.state(); ok("E Escape closes the modal; still on /", !s.modalOpen && s.path === "/", s);
 // property route while the modal is open (e.g. user pastes URL in same tab): use pushState+popstate to emulate in-document navigation
-await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
+await openLegacyModal(T.page, "603566"); /* UX7a: legacy modal via test hook (was a card-title click) */ await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.evaluate(() => { history.pushState({}, "", "/property/603564"); window.dispatchEvent(new PopStateEvent("popstate", { state: {} })); }); await T.page.waitForTimeout(100); s = await T.state();
 ok("E navigating to a property route closes the search modal (modal belongs to the search view)", !s.modalOpen && s.propVisible && s.h1 === "Hacienda 5 De Mayo", s);
 ok("E no page errors", T.errors.length === 0, T.errors);
