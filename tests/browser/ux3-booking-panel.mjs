@@ -251,8 +251,8 @@ for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 640 }]) {
 
 // ===== 10. Keyboard / accessibility =====
 T = await make(); await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2"); s = await T.panel();
-const tab = []; for (let i = 0; i < 3; i++) { await T.page.keyboard.press("Tab"); tab.push(await T.page.evaluate(() => document.activeElement.id)); }
-ok("10 Tab from the title: Show all photos → Check-in field → Checkout field (panel precedes the content in DOM and on phones)", same(tab, ["mvPropGalleryAll", "mvPanelCheckin", "mvPanelCheckout"]), tab);
+const tab = []; for (let i = 0; i < 4; i++) { await T.page.keyboard.press("Tab"); tab.push(await T.page.evaluate(() => document.activeElement.id)); }
+ok("10 Tab from the title: Save (UX7b2) → Show all photos → Check-in field → Checkout field (panel precedes the content in DOM and on phones)", same(tab, ["mvPropSave", "mvPropGalleryAll", "mvPanelCheckin", "mvPanelCheckout"]), tab);
 ok("10 price and status are polite live regions; dates/guests and price rows are description lists; reserved column labelled", same(s.live, ["polite", "polite"]) && s.fieldsTag === "DL" && (await T.page.evaluate(() => document.getElementById("mvPropAside").getAttribute("aria-label"))) === "Booking information", s.live);
 ok("10 no fake inputs: the date fields are real buttons (UX4b) and guests is one native, labelled select (UX5); no text inputs or editable text", await T.page.evaluate(() => !document.querySelector("#mvPanel input, #mvPanel [contenteditable], #mvPanel .mv-panel__field--guests button") && document.querySelectorAll("#mvPanel select").length === 1 && document.getElementById("mvPanelGuestsSelect")?.getAttribute("aria-label") === "Guests"));
 await T.page.focus("#mvPanelCheckin"); await T.page.keyboard.press("Enter"); await T.page.waitForSelector("#mvPdCalMonths .mv-cal__month");

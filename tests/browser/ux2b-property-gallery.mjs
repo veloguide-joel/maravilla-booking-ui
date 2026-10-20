@@ -152,8 +152,8 @@ await T.done();
 
 // ===== 9. Keyboard-only path from the title =====
 T = await make(); await T.go("/property/603566");
-const order = []; for (let i = 0; i < 3; i++) { await T.page.keyboard.press("Tab"); order.push(await T.page.evaluate(() => document.activeElement.id || document.activeElement.className)); }
-ok("9 keyboard: Tab from the property title reaches Show all photos first (photos are not extra tab stops)", order[0] === "mvPropGalleryAll", order);
+const order = []; for (let i = 0; i < 4; i++) { await T.page.keyboard.press("Tab"); order.push(await T.page.evaluate(() => document.activeElement.id || document.activeElement.className)); }
+ok("9 keyboard: Tab from the property title reaches Save (UX7b2) then Show all photos (photos are not extra tab stops)", order[0] === "mvPropSave" && order[1] === "mvPropGalleryAll", order);
 await T.page.focus("#mvPropGalleryAll"); await T.page.keyboard.press("Enter"); v = await T.viewer();
 ok("9 Enter on Show all photos opens the viewer focused on Close", v.open && v.focus === "mvGalleryClose" && v.count === "1 / 8", v);
 await T.page.keyboard.press("Escape"); g = await T.gal(); ok("9 Escape returns focus to Show all photos", g.focus === "mvPropGalleryAll" && !g.viewerOpen, g.focus);

@@ -226,8 +226,8 @@ for (const vp of [{ width: 1280, height: 900 }, { width: 390, height: 844 }, { w
   await T.done();
 }
 T = await make(); await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2");
-const tabs = []; for (let i = 0; i < 4; i++) { await T.page.keyboard.press("Tab"); tabs.push(await T.page.evaluate(() => document.activeElement.id)); }
-ok("9 keyboard: Tab reaches Show all photos → Check-in → Checkout → Guests selector", same(tabs, ["mvPropGalleryAll", "mvPanelCheckin", "mvPanelCheckout", "mvPanelGuestsSelect"]), tabs);
+const tabs = []; for (let i = 0; i < 5; i++) { await T.page.keyboard.press("Tab"); tabs.push(await T.page.evaluate(() => document.activeElement.id)); }
+ok("9 keyboard: Tab reaches Save (UX7b2) → Show all photos → Check-in → Checkout → Guests selector", same(tabs, ["mvPropSave", "mvPropGalleryAll", "mvPanelCheckin", "mvPanelCheckout", "mvPanelGuestsSelect"]), tabs);
 const ring = await T.page.evaluate(() => getComputedStyle(document.getElementById("mvPanelGuestsSelect").parentElement).boxShadow);
 ok("9 visible focus state on the Guests field while the selector has focus", ring && ring !== "none", ring);
 T.api.length = 0; await T.page.keyboard.press("ArrowUp"); await T.settle(); p = await T.panel();
