@@ -281,7 +281,7 @@ ok("6 two applies: Dec 21 → Dec 23 priced (2 nights 3,200 → 2,880); history 
 await T.page.reload(); await T.page.waitForSelector("#mvPanel"); await T.settlePanel(); pd = await T.panel();
 ok("6 reload reproduces the last applied dates and re-validates (fresh calendar + quote): Dec 21–23, 2,880", pd.checkin === "Dec 21, 2026" && pd.price === "2,880 MXN" && pd.url === "/property/603566?checkin=2026-12-21&checkout=2026-12-23&guests=2", pd);
 await T.page.goBack(); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden")); const back = await T.page.evaluate(() => ({ app: !document.getElementById("mv-app").classList.contains("mv-view-hidden"), url: location.pathname + location.search, ci: document.getElementById("mvCheckin").value }));
-ok("6 browser Back returns to the previous page (the search page at /), not to an intermediate date state", back.app && back.url === "/", back);
+ok("6 browser Back returns to the previous page (the search page), not to an intermediate date state; UX7b1: its URL now states the committed Dec 21–23 search (was bare '/')", back.app && back.url === "/?checkin=2026-12-21&checkout=2026-12-23&guests=2", back);
 await T.page.goForward(); await T.page.waitForSelector("#mvPanel"); await T.settlePanel(); pd = await T.panel();
 ok("6 Forward returns to the property with the last applied dates", pd.checkin === "Dec 21, 2026" && pd.checkout === "Dec 23, 2026", pd);
 await T.open("checkin"); await T.page.goBack(); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden")); e = await T.ed();

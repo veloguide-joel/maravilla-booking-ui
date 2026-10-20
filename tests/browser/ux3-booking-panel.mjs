@@ -174,10 +174,13 @@ for (const [name, hooks, expect] of [
 
 // ===== 6. Absent / malformed inherited values =====
 T = await make();
-for (const [name, path, guests] of [["no query", "/property/603566", "2 guests"], ["guests only", "/property/603566?guests=1", "1 guest"], ["check-in only", "/property/603566?checkin=2026-12-20", "2 guests"], ["reversed dates", "/property/603566?checkin=2026-12-24&checkout=2026-12-20", "2 guests"], ["past check-in", "/property/603566?checkin=2026-10-01&checkout=2026-10-05", "2 guests"], ["over 90 nights", "/property/603566?checkin=2026-12-20&checkout=2027-04-01", "2 guests"], ["beyond horizon", "/property/603566?checkin=2027-12-01&checkout=2027-12-05", "2 guests"], ["invalid date", "/property/603566?checkin=2026-02-30&checkout=2026-12-24", "2 guests"], ["script", "/property/603566?checkin=%3Cscript%3E&checkout=2026-12-24", "2 guests"], ["guests 99", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=99", "2 guests"]]) {
+for (const [name, path, guests] of [["no query", "/property/603566", "2 guests"], ["guests only", "/property/603566?guests=1", "1 guest"], ["check-in only", "/property/603566?checkin=2026-12-20", "2 guests"], ["reversed dates", "/property/603566?checkin=2026-12-24&checkout=2026-12-20", "2 guests"], ["past check-in", "/property/603566?checkin=2026-10-01&checkout=2026-10-05", "2 guests"], ["over 90 nights", "/property/603566?checkin=2026-12-20&checkout=2027-04-01", "2 guests"], ["beyond horizon", "/property/603566?checkin=2027-12-01&checkout=2027-12-05", "2 guests"], ["invalid date", "/property/603566?checkin=2026-02-30&checkout=2026-12-24", "2 guests"], ["script", "/property/603566?checkin=%3Cscript%3E&checkout=2026-12-24", "2 guests"]]) {
   T.api.length = 0; await T.go(path); s = await T.panel();
   ok(`6 ${name}: 'Select dates to see price', fields 'Add date', ${guests}, no calendar/quote request, no amount, no link to search`, s.state === "empty" && s.head === "Select dates to see price" && s.checkin === "Add date" && s.checkout === "Add date" && s.guests === guests && s.price === null && !/MXN/.test(s.text) && !T.api.some(isCalQuote) && s.change.text === null, { s: [s.state, s.checkin, s.guests, s.change], api: T.api });
 }
+// UX7b1 (was in the list above: guests 99 discarded the dates): dates kept, guests unconfirmed, still no request or amount
+T.api.length = 0; await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=99"); s = await T.panel();
+ok("6 (UX7b1) guests 99: dates kept (Dec 20 → Dec 24), 'Choose the number of guests to see a price', no calendar/quote request, no amount", s.state === "guests" && s.checkin === "Dec 20, 2026" && s.checkout === "Dec 24, 2026" && s.price === null && !/MXN/.test(s.text) && !T.api.some(isCalQuote), { s: [s.state, s.checkin, s.guests], api: T.api });
 ok("6 no page errors", T.errors.length === 0, T.errors);
 await T.done();
 

@@ -98,7 +98,7 @@ const mk = await T.page.evaluate(() => [...document.querySelectorAll(".mv-card")
 }));
 ok("1 two cards, each: photo and title are real links to /property/{id} with the current search (no dates yet → guests only)", same(mk.map((c) => [c.id, c.titleHref, c.mediaHref]), [["603564", "/property/603564?guests=2", "/property/603564?guests=2"], ["603566", "/property/603566?guests=2", "/property/603566?guests=2"]]), mk);
 ok("1 title link text is the property name (accessible link label)", mk[0].titleText === "Hacienda 5 De Mayo" && mk[1].titleText === "East Side Studio", mk.map((c) => c.titleText));
-ok("1 exactly one keyboard target per card (the title link); the photo link is aria-hidden and tabindex -1", mk.every((c) => same(c.tabbable, ["mv-card__link"]) && c.mediaHidden === "true" && c.mediaTab === "-1" && c.imgInMedia), mk);
+ok("1 (UX7b1: was 'exactly one keyboard target') two keyboard targets per card, in order: the heart button and the title link; the photo link stays aria-hidden and tabindex -1", mk.every((c) => same(c.tabbable, ["mv-heart", "mv-card__link"]) && c.mediaHidden === "true" && c.mediaTab === "-1" && c.imgInMedia), mk);
 ok("1 no nested interactive markup; the heart is outside both links", mk.every((c) => !c.nested && !c.heartInLink && c.links === 2), mk);
 
 // ===== 2. Title click, no search dates =====
@@ -228,9 +228,9 @@ await T.done();
 T = await make();
 await T.go("/"); await T.search("2026-12-20", "2026-12-24");
 const order = await T.page.evaluate(() => [...document.querySelectorAll("#mvResults a[href], #mvResults button, #mvResults [tabindex]")].filter((e) => e.tabIndex >= 0).map((e) => e.className + ":" + e.textContent.trim().slice(0, 18)));
-ok("9 results contain exactly two tab stops, one title link per card", order.length === 2 && order.every((o) => o.startsWith("mv-card__link")), order);
-await T.page.focus(`${card("603564")} .mv-card__link`); await T.page.keyboard.press("Tab"); const f2 = await T.page.evaluate(() => document.activeElement.closest(".mv-card")?.dataset.apartmentId + ":" + document.activeElement.className);
-ok("9 Tab moves from the first title link to the second (the photo link is skipped)", f2 === "603566:mv-card__link", f2);
+ok("9 (UX7b1: was 'two tab stops') results contain four tab stops: heart + title link per card (photo links excluded)", order.length === 4 && order.filter((o) => o.startsWith("mv-card__link")).length === 2 && order.filter((o) => o.startsWith("mv-heart")).length === 2, order);
+await T.page.focus(`${card("603564")} .mv-card__link`); await T.page.keyboard.press("Tab"); await T.page.keyboard.press("Tab"); const f2 = await T.page.evaluate(() => document.activeElement.closest(".mv-card")?.dataset.apartmentId + ":" + document.activeElement.className);
+ok("9 Tab from the first title link reaches the second card's heart, then its title link (the photo link is skipped)", f2 === "603566:mv-card__link", f2);
 await T.page.keyboard.press("Enter"); await T.page.waitForSelector("#mvPanel"); await T.settle(); s = await T.st();
 ok("9 Enter on the title link opens the property page; focus on the property title", s.prop && s.url.startsWith("/property/603566?checkin=2026-12-20") && s.focus === "mvPropTitle" && s.panel.price === "5,760 MXN", s);
 await T.page.keyboard.press("Shift+Tab"); const fb = await T.page.evaluate(() => document.activeElement.id);

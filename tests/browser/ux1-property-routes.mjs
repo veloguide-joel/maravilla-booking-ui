@@ -87,10 +87,15 @@ await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2"); 
 ok("C valid dates+guests initialise the shared search inputs and the booking panel fields (UX3)", s.checkin === "2026-12-20" && s.checkout === "2026-12-24" && s.guests === "2" && s.request === "Dec 20, 2026 | Dec 24, 2026 | 2 guests", s);
 await T.page.waitForFunction(() => /checked/.test(document.getElementById("mvPanel")?.innerText || ""));
 ok("C initialising from the URL triggers only the panel's stay check + quote for this property and stay (UX3; previously none)", same(T.api, ["/api/booking/listings", "/api/booking/calendar?id=603566&from=2026-12-20&to=2026-12-24", "/api/booking/quote?id=603566&from=2026-12-20&to=2026-12-24&guests=2"]), T.api);
-const BAD = ["checkin=2026-12-24&checkout=2026-12-20", "checkin=2026-10-01&checkout=2026-10-05", "checkin=2026-12-20", "checkin=2026-12-20&checkout=2027-04-01", "checkin=2026-12-20&checkout=2026-12-24&guests=99", "checkin=2026-12-20&checkout=2026-12-24&guests=abc", "checkin=2026-02-30&checkout=2026-12-24", "checkin=%3Cscript%3E&checkout=2026-12-24", "checkin=2027-12-01&checkout=2027-12-05", "guests=-1"];
+const BAD = ["checkin=2026-12-24&checkout=2026-12-20", "checkin=2026-10-01&checkout=2026-10-05", "checkin=2026-12-20", "checkin=2026-12-20&checkout=2027-04-01", "checkin=2026-02-30&checkout=2026-12-24", "checkin=%3Cscript%3E&checkout=2026-12-24", "checkin=2027-12-01&checkout=2027-12-05", "guests=-1"];
 for (const q of BAD) {
   await T.go("/property/603566?" + q); s = await T.state();
   ok(`C invalid query ignored safely: ?${q}`, s.h1 === "East Side Studio" && s.checkin === "" && s.checkout === "" && s.guests === "2" && !s.request && T.errors.length === 0, { ci: s.checkin, co: s.checkout, g: s.guests, r: s.request });
+}
+// UX7b1 (was: in BAD above — the whole query discarded): an invalid guest value no longer discards valid dates
+for (const g of ["99", "abc"]) {
+  await T.go(`/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=${g}`); s = await T.state();
+  ok(`C (UX7b1) guests=${g}: valid dates kept, guests left unconfirmed ('Choose guests'); shared guests not overwritten`, s.checkin === "2026-12-20" && s.checkout === "2026-12-24" && s.guests === "2" && s.request === "Dec 20, 2026 | Dec 24, 2026 | Choose guests" && T.errors.length === 0, s);
 }
 await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=3"); s = await T.state();
 ok("C guests=3 (allowed option) applied; cards pre-filtered for return", s.guests === "3" && /3 guests/.test(s.request), s);

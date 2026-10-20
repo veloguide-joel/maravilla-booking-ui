@@ -459,6 +459,8 @@
         cursor:pointer;
         user-select:none;
     }
+    button.mv-heart{ font: inherit; color: inherit; line-height: 1; } /* UX7b1: the heart is a real button */
+    .mv-heart:focus-visible{ outline: 2px solid #111; outline-offset: 2px; }
     .mv-heart[data-on="1"]{ border-color:#ff385c; }
     .mv-heart.is-saved{ color: #ff385c; }
     .mv-heart.is-pulse{
@@ -1511,6 +1513,7 @@
     const quoteByListing = new Map();   // String(id) -> { key, result }
     let modalQuoteSeq = 0;
     let searchSeq = 0;
+    let resultsKey = null; // UX7b1: ci|co|guests the currently shown search prices were validated for (null = none shown)
     const UNCONFIRMED = (reason) => ({ state: "unconfirmed", reason });
     const isMoney = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
 
@@ -1598,6 +1601,7 @@
     /** Invalidate every in-flight quote (search and modal) and drop cached quotes. Called on any date/guest/search change. */
     function invalidateQuotes() {
         searchSeq += 1;
+        resultsKey = null; // UX7b1: shown search prices no longer belong to the committed values
         modalQuoteSeq += 1;
         quoteByListing.clear();
         const sel = String(window.mvSelectedApartmentId || "");
@@ -2156,9 +2160,9 @@
             const href = esc(propertyCardHref(p));
             return `
             <div class="mv-card" data-id="${p.id}" data-property-id="${esc(pid)}" data-apartment-id="${p.id}" data-source="${esc(p.source || "")}">
-                <div class="mv-heart${saved ? " is-saved" : ""}" data-heart="1" data-id="${p.id}" data-property-id="${esc(pid)}" data-on="${saved ? 1 : 0}">
+                <button type="button" class="mv-heart${saved ? " is-saved" : ""}" data-heart="1" data-id="${p.id}" data-property-id="${esc(pid)}" data-on="${saved ? 1 : 0}" aria-label="${esc(heartLabel(p.name, saved))}">
                     ${saved ? "♥" : "♡"}
-                </div>
+                </button>
                 <a class="mv-card__media" href="${href}" data-card-link="1" tabindex="-1" aria-hidden="true">${image}</a>
                 <div class="mv-card__body">
                     <div class="mv-card__title"><a class="mv-card__link" href="${href}" data-card-link="1">${esc(p.name)}</a></div>
@@ -2333,6 +2337,7 @@
                     return;
                 }
                 renderHostawaySearchSummary(hostawayResults, hostawayCards);
+                resultsKey = `${checkIn}|${checkOut}|${guests}`; // UX7b1: these exact values are now validated
             }
         } else {
             // No cards passed the local guest filter (pre-existing footer behaviour).
@@ -2356,10 +2361,14 @@
     $("mvCheckin").addEventListener("change", () => { ensureCheckoutAfterCheckin(); runSearch(); });
     $("mvCheckout").addEventListener("change", runSearch);
     $("mvGuests").addEventListener("change", runSearch);
+    // UX7b1: a committed change replaces an unusable link value, and a results URL that states a search follows it.
+    $("mvGuests").addEventListener("change", () => { guestsParamInvalid = false; guestsParamRaw = null; syncSearchUrl(); });
+    ["mvCheckin", "mvCheckout"].forEach((id) => $(id).addEventListener("change", () => { datesParamInvalid = false; syncSearchUrl(); }));
     $("mvCheckin").addEventListener("input", updateSearchBtnState);
     $("mvCheckout").addEventListener("input", updateSearchBtnState);
 
     // ---- UX7a: search card -> dedicated property page (UX1 routing; the legacy modal is no longer opened from cards) ----
+    function heartLabel(name, saved) { return saved ? `Remove ${name} from saved` : `Save ${name}`; } // UX7b1: accessible name of the heart
     function propertyCardHref(p) {
         return `/property/${encodeURIComponent(String(p.id))}${searchQueryString()}`;
     }
@@ -2372,6 +2381,7 @@
     }
     ["pointerdown", "focusin", "contextmenu"].forEach((type) => $results.addEventListener(type, (e) => refreshCardLink(e.target)));
     function openPropertyFromCard(p) {
+        guestsParamInvalid = false; guestsParamRaw = null; datesParamInvalid = false; // UX7b1: a card carries the visible search values
         // The results entry is stamped with the current search query (as UX1's Back to results builds it) and its scroll,
         // so Back (button or browser) returns to the same results at the same place.
         history.replaceState({ ...(history.state || {}), mvView: "search", mvScrollY: window.scrollY }, "", "/" + searchQueryString());
@@ -2384,6 +2394,31 @@
     }
 
     $results.addEventListener("click", (e) => {
+        // UX7b1: the heart is a real <button> (Tab / Enter / Space); it toggles favourites and never navigates.
+        const heart = e.target.closest("[data-heart]");
+        if (heart && e.target.closest(".mv-card")) {
+            e.preventDefault(); e.stopPropagation();
+            const id = String(heart.dataset.propertyId || heart.dataset.id);
+            const favs = getFavs();
+            if (favs.has(id)) favs.delete(id); else favs.add(id);
+            setFavs(favs);
+            const on = favs.has(id);
+            heart.dataset.on = on ? "1" : "0";
+            heart.textContent = on ? "♥" : "♡";
+            heart.classList.toggle("is-saved", on);
+            const prop = PROPERTIES.find((x) => String(x.id) === String(heart.dataset.id));
+            if (prop) heart.setAttribute("aria-label", heartLabel(prop.name, on));
+            heart.classList.remove("is-pulse");
+            void heart.offsetWidth;
+            heart.classList.add("is-pulse");
+            updateSavedCount($showSaved.classList.contains("is-active"));
+            if (savedFilterActive) {
+                const hadFocus = document.activeElement === heart;
+                renderWithFilters();
+                if (hadFocus) { const again = $results.querySelector(`.mv-heart[data-id="${heart.dataset.id}"]`); (again || $showSaved).focus(); } // keep keyboard focus somewhere sensible
+            }
+            return;
+        }
         const cardLink = e.target.closest("a[data-card-link]");
         if (cardLink && e.target.closest(".mv-card")) {
             // Modified / non-primary clicks keep native link behaviour (new tab or window); plain clicks route in-document.
@@ -2399,24 +2434,6 @@
             e.stopPropagation();
             return;
         }
-        const heart = e.target.closest("[data-heart]");
-        if (heart) {
-            e.preventDefault(); e.stopPropagation();
-            const id = String(heart.dataset.propertyId || heart.dataset.id);
-            const favs = getFavs();
-            if (favs.has(id)) favs.delete(id); else favs.add(id);
-            setFavs(favs);
-            heart.dataset.on = favs.has(id) ? "1" : "0";
-            heart.textContent = favs.has(id) ? "♥" : "♡";
-            heart.classList.toggle("is-saved", favs.has(id));
-            heart.classList.remove("is-pulse");
-            void heart.offsetWidth;
-            heart.classList.add("is-pulse");
-            updateSavedCount($showSaved.classList.contains("is-active"));
-            if (savedFilterActive) renderWithFilters();
-            return;
-        }
-
         const card = e.target.closest(".mv-card");
         if (!card) return;
         // UX7a: the rest of the card body follows the same route as its title link. Modified clicks on the body are left
@@ -2466,33 +2483,56 @@
     function parseRouteQuery(search) {
         const q = new URLSearchParams(search);
         const ci = q.get("checkin"), co = q.get("checkout"), g = q.get("guests");
-        const out = { checkin: null, checkout: null, guests: null, invalid: false };
+        const out = { checkin: null, checkout: null, guests: null, invalidDates: false, invalidGuests: false, rawGuests: null };
         const today = todayISO();
         if (ci !== null || co !== null) {
             const okDates = isIsoDate(ci) && isIsoDate(co) && ci >= today && co > ci
                 && nightsSpan(ci, co) <= CALENDAR_POLICY.maxStayNights
                 && nightsSpan(today, co) <= CALENDAR_POLICY.maxAdvanceDays + 1;
-            if (okDates) { out.checkin = ci; out.checkout = co; } else out.invalid = true;
+            if (okDates) { out.checkin = ci; out.checkout = co; } else out.invalidDates = true;
         }
         if (g !== null) {
             const allowed = new Set([...$("mvGuests").options].map((o) => o.value));
-            if (/^\d{1,2}$/.test(g) && allowed.has(String(Number(g)))) out.guests = Number(g); else out.invalid = true;
+            if (/^\d{1,2}$/.test(g) && allowed.has(String(Number(g)))) out.guests = Number(g); else { out.invalidGuests = true; out.rawGuests = g.slice(0, 20); }
         }
-        // All-or-nothing: one bad parameter means none of them is applied (no half-initialised state).
-        if (out.invalid) return { checkin: null, checkout: null, guests: null, invalid: true };
+        // UX7b1: dates and guests are validated independently; each valid part is applied, each invalid part is flagged.
+        out.invalid = out.invalidDates || out.invalidGuests;
         return out;
     }
+    // UX7b1: an unusable guest value from a link is never treated as verified occupancy. Until the guest picks a count on
+    // the property panel, the panel shows no price and the URL keeps the original (unusable) value, so a reload asks again.
+    let guestsParamInvalid = false, guestsParamRaw = null, datesParamInvalid = false;
     /** Valid URL parameters initialise the shared search inputs (so returning to results keeps them). */
     function applyRouteQuery(rq) {
         if (rq.guests !== null) $("mvGuests").value = String(rq.guests);
         if (rq.checkin && rq.checkout) { $checkinInput.value = rq.checkin; $checkoutInput.value = rq.checkout; }
+        guestsParamInvalid = !!rq.invalidGuests; guestsParamRaw = rq.invalidGuests ? rq.rawGuests : null;
+        datesParamInvalid = !!rq.invalidDates;
         if (rq.guests !== null || rq.checkin) { ensureCheckoutAfterCheckin(); updateDatesDisplay(); updateSearchBtnState(); runSearch(); }
     }
-    function searchQueryString() {
+    function searchQueryString({ visibleGuests = false } = {}) {
         const q = new URLSearchParams();
         if ($checkinInput.value && $checkoutInput.value) { q.set("checkin", $checkinInput.value); q.set("checkout", $checkoutInput.value); }
-        q.set("guests", $("mvGuests").value);
+        // a property URL keeps an unusable link value until the guest corrects it; the results URL states what the form shows
+        q.set("guests", !visibleGuests && guestsParamInvalid && guestsParamRaw !== null ? guestsParamRaw : $("mvGuests").value);
         return `?${q}`;
+    }
+    // ---- UX7b1: the results URL always states the committed search (replaceState only; never a new entry) ----
+    function syncSearchUrl(force = false) {
+        if (routeView !== "search" || parsePropertyRoute(window.location.pathname) !== null) return;
+        if (!force && !window.location.search) return; // a plain "/" makes no claim about dates; leave it as it is
+        const want = "/" + searchQueryString({ visibleGuests: true });
+        if (window.location.pathname + window.location.search !== want) history.replaceState(history.state, "", want);
+    }
+    const GUESTS_CHANGED_NOTICE = "Guests changed. Check availability to update results.";
+    const RECHECK_NOTICE = "Check availability to update results.";
+    /** Back on the results after a property page: URL = committed values; outdated prices were already withdrawn by
+     *  runSearch (change events), so say why there are none — unless the shown prices are for exactly these values. */
+    function onReturnToResults() {
+        syncSearchUrl(true);
+        if (!lastSearchKey || resultsKey === searchKeyNow()) return;
+        const [ci0, co0, g0] = lastSearchKey.split("|"); const [ci1, co1, g1] = searchKeyNow().split("|");
+        $availabilityStatus.textContent = (ci0 !== ci1 || co0 !== co1) ? DATES_CHANGED_NOTICE : (g0 !== g1 ? GUESTS_CHANGED_NOTICE : RECHECK_NOTICE);
     }
     const factPill = (text) => { const el = document.createElement("span"); el.className = "mv-pill"; el.textContent = text; return el; };
 
@@ -2940,7 +2980,11 @@
         unavailable: "Not available for these dates",
         unconfirmed: "Availability could not be confirmed",
         priceUnconfirmed: "Price could not be confirmed",
-        soon: "Online booking for this property opens soon."
+        soon: "Online booking for this property opens soon.",
+        chooseGuests: "Choose the number of guests to see a price",       // UX7b1
+        guestsLinkInvalid: "The guest count in this link couldn't be used. Choose the number of guests above.",
+        datesLinkInvalid: "The dates in this link couldn't be used. Choose new dates above.",
+        capacityHead: "Choose fewer guests to see a price"
     };
     const fmtLongDate = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(y, m - 1, d)); };
     const panelLive = () => routeView === "property";
@@ -2951,8 +2995,9 @@
         const v = Number(sel.value);
         const shared = $("mvGuests");
         const allowed = Number.isInteger(v) && v >= 1 && v <= p.sleeps && [...shared.options].some((o) => o.value === String(v));
-        if (!allowed) { sel.value = String(currentGuests()); return; }   // never accept a count above verified capacity
-        if (v === currentGuests()) return;                               // same value: no requote
+        if (!allowed) { sel.value = guestsParamInvalid ? "" : String(currentGuests()); return; } // never accept a count above verified capacity
+        if (v === currentGuests() && !guestsParamInvalid) return;        // same value: no requote (unless it confirms an unusable link value)
+        guestsParamInvalid = false; guestsParamRaw = null;               // UX7b1: the guest has now chosen a count
         shared.value = String(v);
         shared.dispatchEvent(new Event("change", { bubbles: true }));    // search page mirrors it (runSearch invalidates search quotes)
         history.replaceState(history.state, "", window.location.pathname + searchQueryString());
@@ -2985,15 +3030,17 @@
         // UX5: guest count = a native select laid over the field (the visible text stays the same compact design).
         // Options are 1..verified capacity; a larger committed count (e.g. from a shared URL) is shown as a disabled,
         // flagged option so it is never silently accepted and can be corrected here. The backend stays authoritative.
-        const guestsDd = field("mvPanelGuests", "Guests", `${guests} guest${guests === 1 ? "" : "s"}`, "mv-panel__field--guests");
-        const overCapacity = guests > p.sleeps;
-        guestsDd.parentElement.classList.toggle("is-over", overCapacity);
+        const guestsUnconfirmed = guestsParamInvalid; // UX7b1: the link's guest value was unusable; nothing is assumed
+        const guestsDd = field("mvPanelGuests", "Guests", guestsUnconfirmed ? "Choose guests" : `${guests} guest${guests === 1 ? "" : "s"}`, "mv-panel__field--guests");
+        const overCapacity = !guestsUnconfirmed && guests > p.sleeps;
+        guestsDd.parentElement.classList.toggle("is-over", overCapacity || guestsUnconfirmed);
         guestsDd.setAttribute("aria-hidden", "true"); // the select below carries the accessible name and value
         const guestSel = document.createElement("select"); guestSel.id = "mvPanelGuestsSelect"; guestSel.className = "mv-panel__guestsel";
         guestSel.setAttribute("aria-label", "Guests");
         for (let n = 1; n <= p.sleeps; n += 1) { const o = document.createElement("option"); o.value = String(n); o.textContent = `${n} guest${n === 1 ? "" : "s"}`; guestSel.appendChild(o); }
         if (overCapacity) { const o = document.createElement("option"); o.value = String(guests); o.textContent = `${guests} guests (more than this property sleeps)`; o.disabled = true; guestSel.appendChild(o); }
-        guestSel.value = String(guests);
+        if (guestsUnconfirmed) { const o = document.createElement("option"); o.value = ""; o.textContent = "Choose guests"; o.disabled = true; guestSel.prepend(o); }
+        guestSel.value = guestsUnconfirmed ? "" : String(guests);
         guestSel.addEventListener("change", () => commitPanelGuests(p, guestSel));
         guestsDd.parentElement.appendChild(guestSel);
         const extra = document.createElement("div"); extra.className = "mv-panel__extra";
@@ -3005,14 +3052,24 @@
         const head = (text, cls) => { live.innerHTML = ""; statusBox.innerHTML = ""; extra.innerHTML = ""; card.dataset.state = cls; live.appendChild(el("div", `mv-panel__head mv-panel__head--${cls}`, text)); };
         const retryButton = () => { const b = el("button", "mv-btn mv-btn--ghost mv-panel__retry", "Retry"); b.type = "button"; b.id = "mvPanelRetry"; b.addEventListener("click", () => { if (!current()) return; panelSeq += 1; card.replaceWith(buildBookingPanel(p)); }); return b; };
 
+        // UX7b1: while the committed count exceeds capacity, this correction is appended last in EVERY state (missing
+        // dates, checking, calendar failure, unavailable, unconfirmed, quote failure) and no price is ever rendered.
         const capacityHint = () => { if (overCapacity) statusBox.appendChild(el("div", "mv-panel__status mv-panel__status--hint", `This property sleeps up to ${p.sleeps} guest${p.sleeps === 1 ? "" : "s"}. Choose fewer guests above.`)); };
+        if (guestsUnconfirmed) { // no calendar or quote request until the guest picks a count
+            head(PANEL_TEXT.chooseGuests, "guests");
+            statusBox.appendChild(el("div", "mv-panel__status mv-panel__status--hint", PANEL_TEXT.guestsLinkInvalid));
+            if (!hasDates && datesParamInvalid) statusBox.appendChild(el("div", "mv-panel__status", PANEL_TEXT.datesLinkInvalid));
+            return card;
+        }
         if (!hasDates) {
             head(PANEL_TEXT.selectDates, "empty");
             if (seed.invalid) statusBox.appendChild(el("div", "mv-panel__status", seed.message));
+            else if (datesParamInvalid) statusBox.appendChild(el("div", "mv-panel__status", PANEL_TEXT.datesLinkInvalid));
             capacityHint();
             return card;
         }
         head(PANEL_TEXT.checking, "loading");
+        capacityHint();
         (async () => {
             // 1) fresh occupancy check for exactly this stay (arrival-inclusive / departure-exclusive), fail closed
             const cal = await fetchCalendarWindow(p.id, seed.start, seed.end);
@@ -3026,6 +3083,7 @@
                     head(PANEL_TEXT.unconfirmed, "unconfirmed");
                     const s = el("div", "mv-panel__status", `${SELECTION_TEXT[v.reason] || "Some nights could not be confirmed."} `); s.appendChild(retryButton()); statusBox.appendChild(s);
                 }
+                capacityHint();
                 return;
             }
             // 2) server quote: bookability, restrictions, capacity, price and the D4 estimate (validated by parseQuoteResponse)
@@ -3041,8 +3099,10 @@
             if (r.state !== "quoted") {
                 head(PANEL_TEXT.priceUnconfirmed, "unconfirmed");
                 const s = el("div", "mv-panel__status", "Please try again. "); s.appendChild(retryButton()); statusBox.appendChild(s);
+                capacityHint();
                 return;
             }
+            if (overCapacity) { head(PANEL_TEXT.capacityHead, "capacity"); capacityHint(); return; } // defensive: never a price over capacity
             const nights = `${r.nights} night${r.nights === 1 ? "" : "s"}`;
             const d = r.direct && r.direct.status === "estimated" ? r.direct : null;
             live.innerHTML = ""; statusBox.innerHTML = ""; extra.innerHTML = ""; card.dataset.state = d ? "direct" : "quoted";
@@ -3106,10 +3166,13 @@
         if (st && st.mvFrom === "search") { window.history.back(); return; } // came from results in this document: restore it
         window.history.pushState({ mvView: "search" }, "", "/" + searchQueryString());
         applyRouteFromLocation();
+        onReturnToResults();
         window.scrollTo(0, 0);
     }
     window.addEventListener("popstate", (event) => {
+        const fromView = routeView;
         applyRouteFromLocation({ focusTitle: true });
+        if (fromView === "property" && routeView === "search") onReturnToResults();
         const st = event.state;
         if (routeView === "search" && st && typeof st.mvScrollY === "number") window.scrollTo(0, st.mvScrollY);
     });
@@ -3120,6 +3183,13 @@
     currentList = PROPERTIES;
     renderWithFilters();
     updateSavedCount(false);
+    // UX7b1: a results URL that states a search (e.g. after a refresh) initialises the inputs at load only (never on a
+    // later Back/Forward, which must not overwrite newer committed values); no search request is made.
+    if (parsePropertyRoute(window.location.pathname) === null && window.location.search) {
+        applyRouteQuery(parseRouteQuery(window.location.search));
+        guestsParamInvalid = false; guestsParamRaw = null; // the results form shows (and searches with) its visible guest count
+        syncSearchUrl(true);
+    }
     applyRouteFromLocation({ focusTitle: true }); // UX1: honour a direct /property/:id load (listings arrive asynchronously; renderRoute re-runs then)
 })();
 </script>

@@ -115,18 +115,18 @@ await T.go("/property/603566?guests=4"); p = await T.panel();
 ok("3 no dates + guests=4: no request, 'Select dates' with the capacity hint and flagged field", p.state === "empty" && /Choose fewer guests above/.test(p.status) && p.over === true && !T.api.some((a) => a.startsWith("quote")), p);
 await T.done();
 
-// ===== 4. URL guest parameter handling (UX1 all-or-nothing rule unchanged) =====
+// ===== 4. URL guest parameter handling (UX7b1: dates and guests validated independently; was the UX1 all-or-nothing rule) =====
 T = await make();
 for (const [name, path, expect] of [
   ["valid guests=1", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=1", (p) => p.guests === "1 guest" && p.price === "5,760 MXN"],
   ["missing guests → default 2", "/property/603566?checkin=2026-12-20&checkout=2026-12-24", (p) => p.guests === "2 guests" && p.price === "5,760 MXN"],
-  ["guests=abc → whole query ignored (UX1 rule): no dates, guests 2, no quote", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=abc", (p) => p.state === "empty" && p.guests === "2 guests" && p.checkin === "Add date"],
-  ["guests=0 → ignored the same way", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=0", (p) => p.state === "empty" && p.guests === "2 guests"],
-  ["guests=99 → ignored the same way", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=99", (p) => p.state === "empty" && p.guests === "2 guests"],
+  ["guests=abc → valid dates kept; guests unconfirmed ('Choose guests'), no price, no quote (UX7b1)", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=abc", (p) => p.state === "guests" && p.guests === "Choose guests" && p.checkin === "Dec 20, 2026" && p.price === null],
+  ["guests=0 → handled the same way (UX7b1)", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=0", (p) => p.state === "guests" && p.guests === "Choose guests" && p.checkin === "Dec 20, 2026" && p.price === null],
+  ["guests=99 → handled the same way (UX7b1)", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=99", (p) => p.state === "guests" && p.guests === "Choose guests" && p.checkin === "Dec 20, 2026" && p.price === null],
   ["unavailable dates + guests=1 → refused, no price", "/property/603566?checkin=2026-12-24&checkout=2026-12-31&guests=1", (p) => p.state === "unavailable" && p.price === null && p.guests === "1 guest"]
 ]) {
   T.api.length = 0; await T.go(path); p = await T.panel();
-  ok(`4 ${name}`, expect(p) && (p.state !== "empty" || !T.api.some((a) => a.startsWith("quote"))), { p: [p.state, p.guests, p.checkin, p.price], api: T.api });
+  ok(`4 ${name}`, expect(p) && (!["empty", "guests"].includes(p.state) || !T.api.some((a) => a.startsWith("quote") || a.startsWith("calendar"))), { p: [p.state, p.guests, p.checkin, p.price], api: T.api });
 }
 await T.done();
 
