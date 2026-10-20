@@ -2362,8 +2362,8 @@
     $("mvCheckout").addEventListener("change", runSearch);
     $("mvGuests").addEventListener("change", runSearch);
     // UX7b1: a committed change replaces an unusable link value, and a results URL that states a search follows it.
-    $("mvGuests").addEventListener("change", () => { guestsParamInvalid = false; guestsParamRaw = null; syncSearchUrl(); });
-    ["mvCheckin", "mvCheckout"].forEach((id) => $(id).addEventListener("change", () => { datesParamInvalid = false; syncSearchUrl(); }));
+    $("mvGuests").addEventListener("change", () => { guestsParamInvalid = false; guestsParamRaw = null; syncSearchUrl(); syncBackLink(); });
+    ["mvCheckin", "mvCheckout"].forEach((id) => $(id).addEventListener("change", () => { datesParamInvalid = false; syncSearchUrl(); syncBackLink(); }));
     $("mvCheckin").addEventListener("input", updateSearchBtnState);
     $("mvCheckout").addEventListener("input", updateSearchBtnState);
 
@@ -2517,6 +2517,15 @@
         q.set("guests", !visibleGuests && guestsParamInvalid && guestsParamRaw !== null ? guestsParamRaw : $("mvGuests").value);
         return `?${q}`;
     }
+    // ---- UX7b2: "Back to results" href = the committed search (dates when both set; guests only when confirmed) ----
+    function backToResultsHref() {
+        const q = new URLSearchParams();
+        if ($checkinInput.value && $checkoutInput.value) { q.set("checkin", $checkinInput.value); q.set("checkout", $checkoutInput.value); }
+        if (!guestsParamInvalid) q.set("guests", $("mvGuests").value); // an unusable link value is never passed on as verified
+        const qs = q.toString();
+        return "/" + (qs ? `?${qs}` : "");
+    }
+    function syncBackLink() { const a = $("mvPropBack"); if (a) a.href = backToResultsHref(); }
     // ---- UX7b1: the results URL always states the committed search (replaceState only; never a new entry) ----
     function syncSearchUrl(force = false) {
         if (routeView !== "search" || parsePropertyRoute(window.location.pathname) !== null) return;
@@ -2763,8 +2772,11 @@
     function renderPropertyView(id) {
         $propertyView.innerHTML = "";
         const back = document.createElement("a");
-        back.href = "/" + searchQueryString(); back.className = "mv-prop__back"; back.textContent = ROUTE_TEXT.back; back.id = "mvPropBack";
-        back.addEventListener("click", (e) => { e.preventDefault(); goBackToResults(); });
+        back.href = backToResultsHref(); back.className = "mv-prop__back"; back.textContent = ROUTE_TEXT.back; back.id = "mvPropBack";
+        back.addEventListener("click", (e) => {
+            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // UX7b2: modified clicks keep native new-tab/window behaviour
+            e.preventDefault(); goBackToResults();
+        });
         $propertyView.appendChild(back);
         const h1 = document.createElement("h1"); h1.className = "mv-prop__title"; h1.id = "mvPropTitle"; h1.tabIndex = -1;
         const p = Number.isInteger(id) ? PROPERTIES.find((x) => Number(x.id) === id) : null; // malformed path (NaN) -> not found
@@ -3164,7 +3176,7 @@
     function goBackToResults() {
         const st = window.history.state;
         if (st && st.mvFrom === "search") { window.history.back(); return; } // came from results in this document: restore it
-        window.history.pushState({ mvView: "search" }, "", "/" + searchQueryString());
+        window.history.pushState({ mvView: "search" }, "", backToResultsHref());
         applyRouteFromLocation();
         onReturnToResults();
         window.scrollTo(0, 0);
