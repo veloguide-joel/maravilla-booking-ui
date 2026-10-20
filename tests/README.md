@@ -31,12 +31,16 @@ Node ≥ 20. No network is needed: every proxy call is intercepted and answered 
 | `browser/ux2b-property-gallery.mjs` | 97 | property-page gallery: 12/8-photo pilots, mosaic layouts for 1–5+ photos, viewer (next/prev, counter, Escape, focus return, Tab trap, swipe), broken/malformed/empty images, lazy loading, mobile 390/320 carousel, refresh, Back/Forward, cards/modal/D4 unchanged, network |
 | `browser/ux2c-property-info.mjs` | 72 | property information: both pilots' facts/amenities/times, held 'Beach', show-all toggle, missing/malformed fields, description never shown, no policy/location claims, reserved booking column, 390/320/900 layouts, keyboard/semantics, gallery intact, direct URL/refresh/Back/Forward, modal/calendar/D4 unchanged, network |
 | `browser/ux3-booking-panel.mjs` | 77 | property-page booking panel: D4 figures for both pilots incl. weekly/monthly, Dec 24–31 reservation + overlaps + boundaries, capacity, unconfirmed/Retry, malformed calendar/quote/direct, absent/invalid inherited values, stale answers across property/view changes and refresh, modal parity + isolation (no duplicate ids, modal state untouched), 1280/390/320 layout, keyboard/live regions, GET-only network |
+| `browser/ux4a-calendar-parity.mjs` | 181 | N2 modal calendar parity against the frozen `fixtures/ux4a-baseline-ccdefda.json` trace (60 scripted steps recorded from the ccdefda page): per step, normalized DOM/a11y/state snapshot, ordered API calls and page errors must be identical. `--record <file>` re-records (only ever from a committed baseline page via `PAGE_SRC`) |
 
 Unit tests import the real functions: `lib/page-source.mjs` extracts named declarations from the page's
 inline script at test time (`extract([...names])`); a renamed or removed function fails the suite instead of
 silently testing a stale copy. Browser harnesses load the committed page in Chromium with a fixed clock
 (`fixtures/pilots.mjs` → `TODAY = 2026-10-19`) and deterministic proxy fixtures, including the real
 603566 Dec 24–31 reservation and the 603564 Jan 7–Mar 2 2027 block.
+
+## UX4a parity fixture
+`fixtures/ux4a-baseline-ccdefda.json` is frozen evidence recorded from `consumer/booking-test.html` at commit `ccdefda` (pre-refactor). Do not regenerate it from a refactored page; a deliberate behaviour change needs owner approval and a new, separately recorded baseline.
 
 ## Known limitations
 - Browser harnesses print their own PASS/FAIL lines rather than using a test framework; `browser/run.mjs` aggregates them.
