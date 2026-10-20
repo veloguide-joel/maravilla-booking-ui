@@ -73,7 +73,7 @@ async function make({ vp = { width: 1280, height: 900 }, body = PILOTS } = {}) {
       sections: [...pv.querySelectorAll("section.mv-prop__section")].map((s) => [s.id, s.getAttribute("aria-labelledby"), s.querySelector("h2")?.textContent]),
       headings: [...pv.querySelectorAll("h1,h2,h3")].map((h) => h.tagName + ":" + h.textContent),
       text: pv.innerText,
-      aside: { present: !!document.getElementById("mvPropAside"), rect: r(document.getElementById("mvPropAside")), text: document.getElementById("mvPropAside")?.innerText || "", note: !!document.querySelector("#mvPropAside .mv-prop__note"), request: (() => { const a = document.querySelector("#mvPropAside #mvPanelCheckin")?.textContent; return a && a !== "Not selected" ? `${a} → ${document.getElementById("mvPanelCheckout").textContent}` : null; })() }, // UX3: panel fields replaced the request line
+      aside: { present: !!document.getElementById("mvPropAside"), rect: r(document.getElementById("mvPropAside")), text: document.getElementById("mvPropAside")?.innerText || "", note: !!document.querySelector("#mvPropAside .mv-prop__note"), request: (() => { const a = document.querySelector("#mvPropAside #mvPanelCheckin")?.textContent; return a && a !== "Add date" ? `${a} → ${document.getElementById("mvPanelCheckout").textContent}` : null; })() }, // UX3: panel fields replaced the request line
       main: r(document.getElementById("mvPropMain")), mainText: document.getElementById("mvPropMain")?.innerText || "", gallery: r(document.getElementById("mvPropGallery")), view: r(pv),
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       bookingIdsInView: ["mvHostawayCalendar", "mvHostawayQuote", "mvHostawayQuoteBtn", "mvHostawaySelection", "mvGuests", "mvCheckin", "mvCheckout"].filter((id) => pv.querySelector("#" + id)).length,
@@ -172,7 +172,7 @@ await T.done();
 // ===== 10. Keyboard and accessibility =====
 T = await make(); await T.go("/property/603564");
 const order = []; for (let i = 0; i < 4; i++) { await T.page.keyboard.press("Tab"); order.push(await T.page.evaluate(() => document.activeElement.id || document.activeElement.className)); }
-ok("10 Tab order from the title: Show all photos, the UX3 panel link, then Show all amenities (amenities are not tab stops)", order[0] === "mvPropGalleryAll" && order[1] === "mvPanelChange" && order[2] === "mvPropAmenitiesToggle", order);
+ok("10 Tab order from the title: Show all photos, the two UX4b date fields, then Show all amenities (amenities are not tab stops)", same(order, ["mvPropGalleryAll", "mvPanelCheckin", "mvPanelCheckout", "mvPropAmenitiesToggle"]), order);
 await T.page.focus("#mvPropAmenitiesToggle"); await T.page.keyboard.press("Enter"); s = await T.info();
 ok("10 Enter toggles the amenity list (aria-expanded true)", s.toggle.expanded === "true" && s.amenVisible === 20, s.toggle);
 await T.page.keyboard.press("Space"); s = await T.info();

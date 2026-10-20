@@ -64,6 +64,25 @@
 <div id="mvPropertyView" class="mv-prop mv-view-hidden" aria-live="polite"></div>
 
 <!-- UX2b: full-screen photo viewer for the property view. Separate from the booking modal and calendar (own ids, own key handling). -->
+<!-- UX4b: property-page date editor (second calendar host; own mvPdCal* ids, own draft state). Inner calendar DOM is rebuilt on every open. -->
+<div id="mvPdCal" class="mv-pdcal" aria-hidden="true" hidden>
+    <div class="mv-pdcal__backdrop" data-pdcal-close="1"></div>
+    <div id="mvPdCalPanel" class="mv-pdcal__panel mv-hcal" role="dialog" aria-modal="true" aria-labelledby="mvPdCalTitle" tabindex="-1">
+        <div class="mv-pdcal__header">
+            <div>
+                <div id="mvPdCalTitle" class="mv-pdcal__title">Select dates</div>
+                <div id="mvPdCalSummary" class="mv-pdcal__summary"></div>
+            </div>
+            <button id="mvPdCalClose" class="mv-calendar__close" type="button" aria-label="Close date editor">✕</button>
+        </div>
+        <div id="mvPdCalBody" class="mv-pdcal__body"></div>
+        <div class="mv-pdcal__footer">
+            <button id="mvPdCalClear" class="mv-btn mv-btn--ghost" type="button">Clear dates</button>
+            <button id="mvPdCalApply" class="mv-btn mv-btn--primary" type="button">Apply dates</button>
+        </div>
+    </div>
+</div>
+
 <div id="mvGallery" class="mv-gallery" aria-hidden="true" hidden>
     <div id="mvGalleryPanel" class="mv-gallery__panel" role="dialog" aria-modal="true" aria-labelledby="mvGalleryTitle" tabindex="-1">
         <div class="mv-gallery__bar">
@@ -669,6 +688,33 @@
         .mv-amen.fits-desktop + .mv-amen__toggle{ display: inline-block; }
         .mv-prop__card{ box-shadow: none; padding: 14px; }
     }
+    /* UX4b: clickable date fields + date-editor dialog (anchored beside the panel on desktop, sheet-like on phones). */
+    .mv-panel__field dd button{ all: unset; display: block; width: 100%; box-sizing: border-box; cursor: pointer; font: inherit; color: inherit; }
+    .mv-panel__field dd button:focus-visible{ outline: 2px solid #222; outline-offset: 2px; border-radius: 6px; }
+    .mv-panel__field--in:hover, .mv-panel__field--out:hover{ background: #f7f7f7; }
+    .mv-panel__field dd button.is-empty{ color: #666; }
+    .mv-pdcal{ position: fixed; inset: 0; z-index: 10040; display: flex; align-items: flex-start; justify-content: center; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    .mv-pdcal[hidden]{ display: none; }
+    html.mv-pdcal-open{ overflow: hidden; }
+    .mv-pdcal__backdrop{ position: absolute; inset: 0; background: rgba(0,0,0,.35); }
+    .mv-pdcal--anchored .mv-pdcal__backdrop{ background: rgba(0,0,0,.12); }
+    .mv-pdcal--anchored .mv-pdcal__panel{ position: absolute; margin: 0; box-sizing: border-box; width: 720px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); }
+    .mv-pdcal__panel{ position: relative; margin: 6vh 16px 0; width: 100%; max-width: 760px; max-height: 88vh; overflow: auto; background: #fff; border-radius: 16px; box-shadow: 0 18px 60px rgba(0,0,0,.28); padding: 16px 18px 14px; outline: none; display: flex; flex-direction: column; gap: 6px; }
+    .mv-pdcal__header{ display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .mv-pdcal__title{ font-size: 18px; font-weight: 750; }
+    .mv-pdcal__summary{ font-size: 13px; color: #555; margin-top: 2px; min-height: 18px; }
+    .mv-pdcal .mv-calendar__close{ position: static; }
+    .mv-pdcal .mv-hcal__months{ grid-template-columns: 1fr 1fr; gap: 18px; }
+    .mv-pdcal__footer{ display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-top: 10px; margin-top: 4px; border-top: 1px solid #eee; position: sticky; bottom: 0; background: #fff; }
+    .mv-pdcal__footer .mv-btn{ padding: 9px 14px; font-size: 14px; white-space: nowrap; }
+    .mv-pdcal__footer .mv-btn:disabled{ opacity: .45; cursor: not-allowed; }
+    .mv-pdcal__footer .mv-btn--primary:focus-visible, .mv-pdcal__footer .mv-btn--ghost:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
+    @media(max-width: 760px){
+        .mv-pdcal{ align-items: flex-end; }
+        .mv-pdcal__panel{ margin: 0; max-width: none; max-height: 92vh; border-radius: 16px 16px 0 0; padding: 14px 14px 12px; }
+        .mv-pdcal .mv-hcal__months{ grid-template-columns: 1fr; gap: 12px; }
+        .mv-pdcal__footer{ padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+    }
     /* UX3: compact booking panel (in the reserved aside). Display only — no reserve/checkout controls. */
     .mv-panel__head{ font-size: 18px; font-weight: 750; line-height: 1.3; }
     .mv-panel__head--loading, .mv-panel__head--empty{ font-size: 17px; font-weight: 650; }
@@ -694,8 +740,6 @@
     .mv-panel__row--save{ color: #15803d; }
     .mv-panel__row--total{ font-weight: 750; font-size: 15px; padding-top: 6px; border-top: 1px solid #eee; }
     .mv-panel__disclaimer{ font-size: 12.5px; color: #666; margin-top: 8px; line-height: 1.4; }
-    .mv-panel__change{ display: inline-block; margin-top: 14px; font-size: 14px; color: #222; text-decoration: underline; text-underline-offset: 2px; }
-    .mv-panel__change:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
     .mv-panel .mv-prop__note{ margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee; font-size: 13px; }
     @media(max-width: 900px){
         .mv-prop__main, .mv-prop__aside{ grid-column: 1; grid-row: auto; }
@@ -708,7 +752,6 @@
         .mv-panel__rows{ margin-top: 12px; padding-top: 10px; gap: 6px; }
         .mv-panel__row--total{ display: none; } /* phones: the headline already states the estimated direct total */
         .mv-panel__statusbox .mv-panel__status{ margin-top: 6px; }
-        .mv-panel__change{ margin-top: 10px; }
         .mv-panel .mv-prop__note{ margin-top: 8px; padding-top: 8px; }
     }
     /* UX2b: property photo gallery — desktop mosaic (one large + up to four), mobile swipe carousel.
@@ -2623,6 +2666,159 @@
         document.title = `${p.name} · ${baseTitle}`;
         if (focusTitlePending) { focusTitlePending = false; h1.focus(); }
     }
+    // ---- UX4b: property-page date editor = a second calendar host ----
+    // Same calendar implementation as the modal (UX4a), different host: own ids (mvPdCal*), own listing identity
+    // (pdEditor.id, never window.mvSelectedApartmentId), own draft `selection`, own `calendars` (view/stay state +
+    // request tokens). The draft never touches the committed dates (the shared search inputs / URL / UX3 panel) until
+    // Apply. Closing sets pdEditor.open = false, so isActive() is false and any in-flight calendar answer is dropped;
+    // the draft maps are also emptied, so isCurrentCal() fails for late answers as well.
+    const PD_CAL_IDS = { box: "mvPdCalPanel", status: "mvPdCalStatus", prev: "mvPdCalPrev", next: "mvPdCalNext", range: "mvPdCalRange", legend: "mvPdCalLegend", months: "mvPdCalMonths", selection: "mvPdCalSelection" };
+    const pdEditor = { open: false, id: null, prop: null, opener: null, openerField: null, verified: false, pending: false, draftEmpty: true, committedHadDates: false, explicitClear: false, actions: null };
+    const propertyEditorHost = {
+        name: "propertyEditor",
+        el: (name) => $(PD_CAL_IDS[name]),
+        isActive: (id) => pdEditor.open && String(pdEditor.id) === String(id),
+        activeId: () => String(pdEditor.id),
+        selection: new Map(),
+        calendars: new Map(),
+        onDatesChanged: () => {}, // draft only: no committed price depends on the draft (the panel's quote belongs to the committed dates)
+        renderActions(id, { sel, verified, pending, checkFailed, addBtn, actions }) {
+            if (checkFailed) addBtn("Retry", actions.retry);
+            if (sel.start && sel.end) {
+                addBtn("Change check-in", actions.editStart, "mv-btn mv-btn--ghost", { "aria-pressed": String(sel.edit === "start") });
+                addBtn("Change check-out", actions.editEnd, "mv-btn mv-btn--ghost", { "aria-pressed": String(sel.edit === "end") });
+            }
+            pdEditor.verified = verified; pdEditor.pending = pending; pdEditor.draftEmpty = !sel.start && !sel.end;
+            pdEditor.actions = actions; // the footer's Clear uses the engine's own clear action
+        },
+        afterSelection(id, sel) {
+            const summary = $("mvPdCalSummary"), clear = $("mvPdCalClear"), apply = $("mvPdCalApply");
+            if (!summary || !clear || !apply) return;
+            const n = sel.start && sel.end ? nightsSpan(sel.start, sel.end) : 0;
+            summary.textContent = sel.start && sel.end ? `${fmtShort(sel.start)} → ${fmtShort(sel.end)} · ${n} night${n === 1 ? "" : "s"}` : sel.start ? `Check-in ${fmtShort(sel.start)} — choose a check-out date` : "Choose a check-in night, then a check-out day";
+            clear.disabled = pdEditor.draftEmpty;
+            if (!pdEditor.draftEmpty) pdEditor.explicitClear = false; // a new date choice supersedes an earlier Clear
+            // Apply commits only a fresh-verified complete stay, or an explicit Clear of previously committed dates
+            // (an empty draft caused by a refused click is NOT a request to clear).
+            const clearing = pdEditor.draftEmpty && pdEditor.explicitClear && pdEditor.committedHadDates;
+            apply.disabled = !(pdEditor.verified || clearing);
+            apply.textContent = clearing ? "Apply (clear dates)" : "Apply dates";
+            positionDateEditor(); // content height changes with every render (status, messages, buttons)
+        }
+    };
+    const $pdCal = $("mvPdCal"), $pdCalPanel = $("mvPdCalPanel"), $pdCalBody = $("mvPdCalBody");
+    function openDateEditor(p, openerBtn, field) {
+        if (pdEditor.open) closeDateEditor({ restoreFocus: false });
+        const key = String(p.id);
+        pdEditor.open = true; pdEditor.id = p.id; pdEditor.prop = p; pdEditor.opener = openerBtn || document.activeElement; pdEditor.openerField = field;
+        pdEditor.verified = false; pdEditor.pending = false; pdEditor.explicitClear = false; pdEditor.actions = null;
+        // Draft = the committed dates (validated the same way the modal validates carried-over search dates).
+        const seed = seedSelectionFromSearch();
+        const draft = seed.ok ? { start: seed.start, end: seed.end } : { start: null, end: null };
+        pdEditor.committedHadDates = seed.ok;
+        if (field === "checkout" && draft.start && draft.end) draft.edit = "end"; // clicked Checkout: edit that end first
+        else if (field === "checkin" && draft.start && draft.end) draft.edit = "start";
+        propertyEditorHost.selection.set(key, draft);
+        propertyEditorHost.calendars.set(key, { viewMonth: clampViewMonth(startOfMonth(draft.start ? parseISODate(draft.start) : startOfToday())), view: null, viewToken: 0, stay: null, stayToken: 0 });
+        // Fresh calendar DOM per open (like the modal): no handler accumulates on reused elements.
+        $pdCalBody.innerHTML = `
+            <div class="mv-hcal__status" id="mvPdCalStatus"></div>
+            <div class="mv-calendar__nav mv-hcal__nav">
+                <button id="mvPdCalPrev" class="mv-calendar__navbtn" type="button" aria-label="Previous month">&#8249;</button>
+                <div id="mvPdCalRange" class="mv-calendar__range" role="status" aria-live="polite"></div>
+                <button id="mvPdCalNext" class="mv-calendar__navbtn" type="button" aria-label="Next month">&#8250;</button>
+            </div>
+            <div class="mv-hcal__legend" id="mvPdCalLegend">
+                <span><i class="mv-hcal__swatch"></i>Available night</span>
+                <span><i class="mv-hcal__swatch is-blocked"></i>Unavailable night</span>
+                <span><i class="mv-hcal__swatch is-unknown"></i>Not confirmed</span>
+            </div>
+            <div class="mv-calendar__months mv-hcal__months" id="mvPdCalMonths"></div>
+            <div class="mv-hcal__selection" id="mvPdCalSelection" aria-live="polite"></div>`;
+        $("mvPdCalTitle").textContent = `Select dates · ${p.name}`;
+        $pdCal.hidden = false; $pdCal.setAttribute("aria-hidden", "false");
+        document.documentElement.classList.add("mv-pdcal-open");
+        $propertyView.inert = true;
+        bindCalendarControls(propertyEditorHost, p.id);
+        loadHostawayCalendar(propertyEditorHost, p.id); // fresh visible months + fresh stay check for the draft; never a quote
+        positionDateEditor();
+        $("mvPdCalClose").focus();
+    }
+    /** Desktop (>900px): place the dialog beside the booking panel (right edges aligned, top at the date fields). Smaller screens: CSS layout. */
+    function positionDateEditor() {
+        if (!pdEditor.open) return;
+        const anchored = window.innerWidth > 900;
+        $pdCal.classList.toggle("mv-pdcal--anchored", anchored);
+        const reset = () => { $pdCalPanel.style.left = ""; $pdCalPanel.style.top = ""; $pdCalPanel.style.maxHeight = ""; };
+        if (!anchored) { reset(); return; }
+        const card = $("mvPanel"), fields = card && card.querySelector(".mv-panel__fields");
+        if (!card || !fields) { reset(); return; }
+        const c = card.getBoundingClientRect(), f = fields.getBoundingClientRect(), vh = window.innerHeight;
+        const w = $pdCalPanel.offsetWidth, h = Math.min($pdCalPanel.scrollHeight, vh - 32); // natural height, at most the viewport
+        const left = Math.min(Math.max(16, c.right - w), window.innerWidth - w - 16);
+        const top = Math.min(Math.max(16, f.top - 8), Math.max(16, vh - h - 16));
+        $pdCalPanel.style.left = `${Math.round(left)}px`; $pdCalPanel.style.top = `${Math.round(top)}px`;
+        $pdCalPanel.style.maxHeight = `${Math.round(vh - top - 16)}px`; // the dialog scrolls inside; its sticky footer stays on screen
+    }
+    window.addEventListener("resize", positionDateEditor);
+    function closeDateEditor({ restoreFocus = true } = {}) {
+        if (!pdEditor.open) return;
+        const key = String(pdEditor.id);
+        pdEditor.open = false; // isActive() is now false: late calendar answers are dropped
+        propertyEditorHost.selection.delete(key); propertyEditorHost.calendars.delete(key); // the draft is discarded
+        $pdCal.hidden = true; $pdCal.setAttribute("aria-hidden", "true"); $pdCal.classList.remove("mv-pdcal--anchored");
+        $pdCalPanel.style.left = ""; $pdCalPanel.style.top = ""; $pdCalPanel.style.maxHeight = "";
+        document.documentElement.classList.remove("mv-pdcal-open");
+        $propertyView.inert = false;
+        $pdCalBody.innerHTML = "";
+        const opener = pdEditor.opener, field = pdEditor.openerField; pdEditor.opener = null; pdEditor.prop = null; pdEditor.id = null;
+        if (!restoreFocus) return;
+        const target = opener && opener.isConnected ? opener : $(field === "checkout" ? "mvPanelCheckout" : "mvPanelCheckin");
+        if (target && typeof target.focus === "function") target.focus();
+    }
+    /** Commit the draft: a fresh-verified complete stay or an explicit clear. Then the committed state (inputs → URL → UX3 pipeline) moves on. */
+    function applyDateEditor() {
+        if (!pdEditor.open) return;
+        const p = pdEditor.prop, key = String(p.id), field = pdEditor.openerField;
+        const draft = propertyEditorHost.selection.get(key) || { start: null, end: null };
+        const complete = !!(draft.start && draft.end);
+        if (complete && !pdEditor.verified) return;           // unverified / pending / failed stays are never committed
+        if (!complete && (draft.start || draft.end)) return;  // incomplete: nothing to commit
+        if (!complete && !(pdEditor.explicitClear && pdEditor.committedHadDates)) return; // only an explicit Clear of committed dates
+        closeDateEditor({ restoreFocus: false });
+        if (complete) { setInputValue($checkoutInput, draft.end); setInputValue($checkinInput, draft.start); }
+        else { setInputValue($checkinInput, ""); setInputValue($checkoutInput, ""); }
+        updateDatesDisplay(); updateSearchBtnState(); // the search page mirrors the committed dates (runSearch already ran via the change events)
+        history.replaceState(history.state, "", window.location.pathname + searchQueryString()); // same property, same guests; no history entry per change
+        panelSeq += 1;
+        const card = $("mvPanel");
+        if (card) card.replaceWith(buildBookingPanel(p)); // old quote gone immediately; UX3 pipeline re-runs for the committed dates
+        const back = $(field === "checkout" ? "mvPanelCheckout" : "mvPanelCheckin");
+        if (back) back.focus();
+    }
+    $("mvPdCalClose").addEventListener("click", () => closeDateEditor());
+    $pdCal.addEventListener("click", (e) => { if (e.target.dataset.pdcalClose) closeDateEditor(); });
+    $("mvPdCalApply").addEventListener("click", applyDateEditor);
+    $("mvPdCalClear").addEventListener("click", () => {
+        if (!pdEditor.open || !pdEditor.actions) return;
+        pdEditor.actions.clear(); // engine's clear: draft emptied, stay check invalidated, re-rendered
+        pdEditor.explicitClear = true;
+        propertyEditorHost.afterSelection(pdEditor.id, propertyEditorHost.selection.get(String(pdEditor.id)) || { start: null, end: null });
+        const next = $("mvPdCalApply"); if (next && !next.disabled) next.focus(); else { const c = $("mvPdCalClose"); if (c) c.focus(); } // Clear just became disabled
+    });
+    // Capture phase while open: Escape closes (never reaching the search-calendar / modal handlers), Tab stays inside the dialog.
+    document.addEventListener("keydown", (e) => {
+        if (!pdEditor.open) return;
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeDateEditor(); return; }
+        if (e.key === "Tab") {
+            const f = [...$pdCalPanel.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])")].filter((el) => el.offsetParent !== null);
+            if (!f.length) return;
+            const first = f[0], last = f[f.length - 1];
+            if (e.shiftKey && (document.activeElement === first || !$pdCalPanel.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+    }, true);
+
     // ---- UX3: compact booking panel on the property page (display + validation only; no checkout) ----
     // Reuses the validated booking engine exactly as the modal does, in the same order:
     //   seedSelectionFromSearch()  -> the modal's carry-over validation of the shared search dates
@@ -2639,8 +2835,6 @@
         unavailable: "Not available for these dates",
         unconfirmed: "Availability could not be confirmed",
         priceUnconfirmed: "Price could not be confirmed",
-        change: "Change dates or guests",
-        choose: "Choose dates on the search page",
         soon: "Online booking for this property opens soon."
     };
     const fmtLongDate = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(y, m - 1, d)); };
@@ -2651,19 +2845,25 @@
         const live = document.createElement("div"); live.className = "mv-panel__live"; live.id = "mvPanelLive"; live.setAttribute("aria-live", "polite");
         const statusBox = document.createElement("div"); statusBox.className = "mv-panel__statusbox"; statusBox.id = "mvPanelStatus"; statusBox.setAttribute("aria-live", "polite");
         const fields = document.createElement("dl"); fields.className = "mv-panel__fields";
-        const field = (id, label, value, cls) => { const box = document.createElement("div"); box.className = `mv-panel__field ${cls || ""}`.trim(); const dt = document.createElement("dt"); dt.textContent = label; const dd = document.createElement("dd"); dd.id = id; dd.textContent = value; box.append(dt, dd); fields.appendChild(box); return dd; };
+        const field = (id, label, value, cls, onClick) => {
+            const box = document.createElement("div"); box.className = `mv-panel__field ${cls || ""}`.trim();
+            const dt = document.createElement("dt"); dt.textContent = label; const dd = document.createElement("dd");
+            if (onClick) { // UX4b: date fields open the on-page editor
+                const b = document.createElement("button"); b.type = "button"; b.id = id; b.textContent = value; b.setAttribute("aria-haspopup", "dialog"); b.setAttribute("aria-label", `${label}: ${value}. Change dates`);
+                if (value === "Add date") b.classList.add("is-empty");
+                b.addEventListener("click", () => onClick(b)); dd.appendChild(b);
+            } else { dd.id = id; dd.textContent = value; }
+            box.append(dt, dd); fields.appendChild(box); return dd;
+        };
         const seed = seedSelectionFromSearch(); // same validation the modal applies to carried-over search dates
         const guests = currentGuests();
         const hasDates = seed.ok;
-        field("mvPanelCheckin", "Check-in", hasDates ? fmtLongDate(seed.start) : "Not selected", "mv-panel__field--in");
-        field("mvPanelCheckout", "Checkout", hasDates ? fmtLongDate(seed.end) : "Not selected", "mv-panel__field--out");
-        field("mvPanelGuests", "Guests", `${guests} guest${guests === 1 ? "" : "s"}`, "mv-panel__field--guests");
+        field("mvPanelCheckin", "Check-in", hasDates ? fmtLongDate(seed.start) : "Add date", "mv-panel__field--in", (b) => openDateEditor(p, b, "checkin"));
+        field("mvPanelCheckout", "Checkout", hasDates ? fmtLongDate(seed.end) : "Add date", "mv-panel__field--out", (b) => openDateEditor(p, b, "checkout"));
+        field("mvPanelGuests", "Guests", `${guests} guest${guests === 1 ? "" : "s"}`, "mv-panel__field--guests"); // display-only until UX5
         const extra = document.createElement("div"); extra.className = "mv-panel__extra";
-        const change = document.createElement("a"); change.className = "mv-panel__change"; change.id = "mvPanelChange";
-        change.href = "/" + searchQueryString(); change.textContent = hasDates ? PANEL_TEXT.change : PANEL_TEXT.choose;
-        change.addEventListener("click", (e) => { e.preventDefault(); goBackToResults(); });
         const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = PANEL_TEXT.soon;
-        card.append(live, fields, statusBox, extra, change, note);
+        card.append(live, fields, statusBox, extra, note);
 
         const current = () => seq === panelSeq && panelLive() && card.isConnected;
         const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
@@ -2749,6 +2949,7 @@
         const id = parsePropertyRoute(window.location.pathname);
         closeGallery({ restoreFocus: false }); // UX2b: a route change / re-render replaces the gallery the viewer belongs to
         panelSeq += 1; // UX3: any in-flight panel check belongs to the previous render and is discarded
+        closeDateEditor({ restoreFocus: false }); // UX4b: the editor belongs to the view being replaced; its pending answers are dropped
         if (id === null) { if (routeView !== "search") showView("search"); return; }
         if ($modal.getAttribute("aria-hidden") === "false") closeModal(); // the modal belongs to the search view
         showView("property");

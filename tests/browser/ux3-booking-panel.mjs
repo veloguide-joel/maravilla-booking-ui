@@ -100,7 +100,7 @@ ok("1 fields: Check-in Dec 20, 2026 · Checkout Dec 24, 2026 · 2 guests; status
 ok("1 disclaimer: approved D4 note + quote-only note; 'opens soon' kept", same(s.disclaimers, ["Estimated direct-booking total. Final price confirmed at checkout. Quote only — no inventory is held."]) && s.note === "Online booking for this property opens soon.", s);
 ok("1 order: price/standard, then dates, guests, status, disclaimer (top to bottom)", s.order.every((v) => v !== null) && s.order[0] < s.order[2] && s.order[1] < s.order[2] && s.order[2] < s.order[3] && s.order[3] < s.order[4] && s.order[4] < s.order[5], s.order);
 ok("1 reused engine: exactly one stay-window calendar check then one quote, both GET", same(T.api, ["/api/booking/listings", "/api/booking/calendar?id=603566&from=2026-12-20&to=2026-12-24", "/api/booking/quote?id=603566&from=2026-12-20&to=2026-12-24&guests=2"]) && T.methods.every((m) => m === "GET"), { api: T.api, m: T.methods });
-ok("1 no checkout: no reserve/pay/booking button, no disabled buttons; the only control is 'Change dates or guests' → search", !s.controls.some((c) => CHECK.test(c.text) || c.disabled) && same(s.controls.map((c) => c.text), ["Change dates or guests"]) && s.change.href === "/?checkin=2026-12-20&checkout=2026-12-24&guests=2", s.controls);
+ok("1 no checkout: no reserve/pay/booking button, no disabled buttons; the only controls are the two date fields (UX4b; the search link is gone)", !s.controls.some((c) => CHECK.test(c.text) || c.disabled) && same(s.controls.map((c) => c.text), ["Dec 20, 2026", "Dec 24, 2026"]) && s.change.text === null, s.controls);
 ok("1 no duplicate ids; no booking-engine ids inside the property view; modal selection untouched", s.dupIds.length === 0 && s.bookingIdsInView === 0 && (s.selectedApartment === null || s.selectedApartment === ""), { d: s.dupIds, b: s.bookingIdsInView, sel: s.selectedApartment });
 ok("1 desktop: panel in the reserved right column (sticky), beside the main column, under the gallery", s.aside.x > s.main.r && s.sticky === "sticky" && s.aside.y > s.gallery.b && s.rect.w >= 300, { a: s.aside, m: s.main, st: s.sticky });
 if (SHOTS) await T.page.screenshot({ path: `${SHOTS}/ux3-desk-603566.png`, fullPage: true });
@@ -174,7 +174,7 @@ for (const [name, hooks, expect] of [
 T = await make();
 for (const [name, path, guests] of [["no query", "/property/603566", "2 guests"], ["guests only", "/property/603566?guests=1", "1 guest"], ["check-in only", "/property/603566?checkin=2026-12-20", "2 guests"], ["reversed dates", "/property/603566?checkin=2026-12-24&checkout=2026-12-20", "2 guests"], ["past check-in", "/property/603566?checkin=2026-10-01&checkout=2026-10-05", "2 guests"], ["over 90 nights", "/property/603566?checkin=2026-12-20&checkout=2027-04-01", "2 guests"], ["beyond horizon", "/property/603566?checkin=2027-12-01&checkout=2027-12-05", "2 guests"], ["invalid date", "/property/603566?checkin=2026-02-30&checkout=2026-12-24", "2 guests"], ["script", "/property/603566?checkin=%3Cscript%3E&checkout=2026-12-24", "2 guests"], ["guests 99", "/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=99", "2 guests"]]) {
   T.api.length = 0; await T.go(path); s = await T.panel();
-  ok(`6 ${name}: 'Select dates to see price', fields 'Not selected', ${guests}, no calendar/quote request, no amount`, s.state === "empty" && s.head === "Select dates to see price" && s.checkin === "Not selected" && s.checkout === "Not selected" && s.guests === guests && s.price === null && !/MXN/.test(s.text) && !T.api.some(isCalQuote) && s.change.text === "Choose dates on the search page", { s: [s.state, s.checkin, s.guests, s.change], api: T.api });
+  ok(`6 ${name}: 'Select dates to see price', fields 'Add date', ${guests}, no calendar/quote request, no amount, no link to search`, s.state === "empty" && s.head === "Select dates to see price" && s.checkin === "Add date" && s.checkout === "Add date" && s.guests === guests && s.price === null && !/MXN/.test(s.text) && !T.api.some(isCalQuote) && s.change.text === null, { s: [s.state, s.checkin, s.guests, s.change], api: T.api });
 }
 ok("6 no page errors", T.errors.length === 0, T.errors);
 await T.done();
@@ -209,9 +209,9 @@ await T.done();
 // ===== 8. Search/modal parity and isolation =====
 T = await make();
 await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2"); const panelVals = await T.panel();
-await T.page.click("#mvPanelChange"); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden"));
+await T.page.click("#mvPropBack"); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden"));
 const searchState = await T.page.evaluate(() => ({ path: location.pathname + location.search, ci: document.getElementById("mvCheckin").value, co: document.getElementById("mvCheckout").value, g: document.getElementById("mvGuests").value }));
-ok("8 'Change dates or guests' returns to the search page with the same dates and guests", searchState.path === "/?checkin=2026-12-20&checkout=2026-12-24&guests=2" && searchState.ci === "2026-12-20" && searchState.g === "2", searchState);
+ok("8 'Back to results' (the only route to search; UX4b removed the panel link) keeps the same dates and guests", searchState.path === "/?checkin=2026-12-20&checkout=2026-12-24&guests=2" && searchState.ci === "2026-12-20" && searchState.g === "2", searchState);
 await T.page.click('.mv-card[data-apartment-id="603566"] .mv-card__title'); await T.page.waitForSelector("#mvHostawayCalendarMonths .mv-cal__month");
 await T.page.waitForFunction(() => !/checking availability/.test(document.getElementById("mvHostawaySelection").innerText));
 await T.page.click("#mvHostawayQuoteBtn"); await T.page.waitForFunction(() => /direct total/.test(document.getElementById("mvHostawayQuote").innerText));
@@ -246,12 +246,12 @@ for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 640 }]) {
 
 // ===== 10. Keyboard / accessibility =====
 T = await make(); await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2"); s = await T.panel();
-const tab = []; for (let i = 0; i < 2; i++) { await T.page.keyboard.press("Tab"); tab.push(await T.page.evaluate(() => document.activeElement.id)); }
-ok("10 Tab from the title: Show all photos → Change dates or guests (panel precedes the content in DOM and on phones; amenities order covered in UX2c)", same(tab, ["mvPropGalleryAll", "mvPanelChange"]), tab);
+const tab = []; for (let i = 0; i < 3; i++) { await T.page.keyboard.press("Tab"); tab.push(await T.page.evaluate(() => document.activeElement.id)); }
+ok("10 Tab from the title: Show all photos → Check-in field → Checkout field (panel precedes the content in DOM and on phones)", same(tab, ["mvPropGalleryAll", "mvPanelCheckin", "mvPanelCheckout"]), tab);
 ok("10 price and status are polite live regions; dates/guests and price rows are description lists; reserved column labelled", same(s.live, ["polite", "polite"]) && s.fieldsTag === "DL" && (await T.page.evaluate(() => document.getElementById("mvPropAside").getAttribute("aria-label"))) === "Booking information", s.live);
-ok("10 no fake inputs: dates/guests are text, not buttons/inputs", !(await T.page.evaluate(() => !!document.querySelector("#mvPanel input, #mvPanel select, #mvPanel .mv-panel__field button, #mvPanel [contenteditable]"))));
-await T.page.focus("#mvPanelChange"); await T.page.keyboard.press("Enter"); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden"));
-ok("10 Enter on 'Change dates or guests' returns to search", await T.page.evaluate(() => location.pathname === "/"));
+ok("10 no fake inputs: guests is text; the date fields are real buttons that open the editor (UX4b); no inputs/selects", !(await T.page.evaluate(() => !!document.querySelector("#mvPanel input, #mvPanel select, #mvPanel .mv-panel__field--guests button, #mvPanel [contenteditable]"))));
+await T.page.focus("#mvPanelCheckin"); await T.page.keyboard.press("Enter"); await T.page.waitForSelector("#mvPdCalMonths .mv-cal__month");
+ok("10 Enter on the Check-in field opens the on-page date editor; Escape closes it and restores focus", await T.page.evaluate(() => !document.getElementById("mvPdCal").hidden) && await (async () => { await T.page.keyboard.press("Escape"); return T.page.evaluate(() => document.getElementById("mvPdCal").hidden && document.activeElement.id === "mvPanelCheckin"); })());
 await T.done();
 T = await make({ hooks: { calendar: () => ({ status: 503 }) } }); await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2");
 await T.page.focus("#mvPanelRetry"); T.api.length = 0; await T.page.keyboard.press("Enter"); await T.settle();

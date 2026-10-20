@@ -222,10 +222,15 @@ const results = {}; let failed = 0;
 const ok = (name, cond, detail) => { results[name] = cond ? "PASS" : "FAIL " + JSON.stringify(detail).slice(0, 1500); if (!cond) { failed++; console.log("FAIL", name, JSON.stringify(detail).slice(0, 1500)); } };
 ok("script length identical", base.steps.length === trace.length, [base.steps.length, trace.length]);
 const n = Math.min(base.steps.length, trace.length);
-const diffKeys = (a, b) => Object.keys({ ...a, ...b }).filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+// Harness determinism (found during UX4b; reproduces on the ccdefda page against its own recording, ~1 run in 6):
+// E2 is snapped synchronously right after Escape hides the modal. Chromium moves focus off the now-hidden button at its
+// next rendering update, so `focus` at that instant is either the quote button (what the frozen baseline caught) or BODY.
+// That single field is excluded at that single step; everything else in E2, and focus everywhere else, is still compared.
+const TIMING_SENSITIVE = { "E2 Escape closes the modal": ["focus"] };
+const diffKeys = (a, b, step) => Object.keys({ ...a, ...b }).filter((k) => !(TIMING_SENSITIVE[step] || []).includes(k) && JSON.stringify(a[k]) !== JSON.stringify(b[k]));
 for (let i = 0; i < n; i++) {
   const b = base.steps[i], t = trace[i];
-  const dk = diffKeys(b.snap, t.snap);
+  const dk = diffKeys(b.snap, t.snap, b.step);
   ok(`${b.step} — DOM/a11y/state identical`, b.step === t.step && dk.length === 0, { keys: dk, base: Object.fromEntries(dk.map((k) => [k, b.snap[k]])), now: Object.fromEntries(dk.map((k) => [k, t.snap[k]])) });
   ok(`${b.step} — API calls identical`, JSON.stringify(b.api) === JSON.stringify(t.api), { base: b.api, now: t.api });
   ok(`${b.step} — no page errors`, t.errors.length === 0, t.errors);
