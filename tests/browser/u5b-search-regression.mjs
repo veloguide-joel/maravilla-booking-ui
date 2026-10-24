@@ -73,7 +73,7 @@ let s = await snap();
 ok("U1 two cards, Hostaway, default subtitle", s.cards.length === 2 && s.cards.every((c) => c.sub === "Select dates to see price & availability"), s);
 ok("U1 images loaded", await page.evaluate(() => [...document.querySelectorAll(".mv-card img")].every((i) => i.complete && i.naturalWidth > 0)));
 ok("U1 no apartments panel in DOM", await page.evaluate(() => !document.querySelector(".mv-apartments, #mvApartmentsList, #mvApartmentsStatus")));
-ok("U5a currency note", (await $("mvCurrencyNote").textContent()) === "Prices are currently displayed in Mexican pesos (MXN).");
+ok("U5a currency note (from the loaded listings' currency)", (await $("mvCurrencyNote").textContent()) === "Prices are shown in Mexican pesos (MXN).");
 // --- U4 live-shape search ---
 s = await search("2026-11-20", "2026-11-23", 2);
 ok("search 3n: 6,600 / 4,800, footer 1,600", s.cards[0].sub === "from 2,200 MXN/night · 6,600 MXN total" && s.cards[1].sub === "from 1,600 MXN/night · 4,800 MXN total" && s.status === "Available · from 1,600 MXN/night", s);
@@ -122,7 +122,7 @@ await openCard("603564");
 ok("U2 3 blocked cells on 603564", (await page.locator(".mv-cal__day--hostaway.is-blocked").count()) === 3);
 ok("U2 legend + status", (await $("mvHostawayCalendarStatus").textContent()).startsWith("Live calendar"));
 ok("modal has no reserve/checkout controls", (await page.evaluate(() => [...document.querySelectorAll("#mvModal button, #mvModal a")].map((b) => b.textContent.trim()).filter((t) => /reserve|book|checkout|pay|check availability/i.test(t)))).length === 0);
-ok("modal note MXN", await page.evaluate(() => document.querySelector("#mvModalContent").textContent.includes("currently displayed in Mexican pesos (MXN)")));
+ok("modal note MXN (from the listing's currency)", await page.evaluate(() => document.querySelector("#mvModalContent").textContent.includes("are shown in Mexican pesos (MXN)")));
 await cell("2026-11-09").click(); await cell("2026-11-10").click(); ok("U3 Nov 9→10 clear", (await sel()).includes("1 night · occupied nights clear"), await sel());
 await cell("2026-11-09").click(); await cell("2026-11-11").click(); ok("U3 Nov 9→11 rejected at Nov 10", (await sel()).includes("unavailable night (Nov 10)"), await sel());
 await cell("2026-11-10").click(); ok("U3 Nov 10 refused as check-in", (await sel()).startsWith("Nov 10 is not available for check-in"), await sel());

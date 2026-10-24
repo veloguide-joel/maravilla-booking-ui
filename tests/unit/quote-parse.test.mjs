@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { extract } from "../lib/page-source.mjs";
 
-const { parseQuoteResponse, fmtMoney } = extract(["nightsSpan", "QUOTE_DECISIONS", "UNCONFIRMED", "isMoney", "fmtMoney", "parseQuoteResponse", "toCents", "parseDirectEstimate"]);
+const { parseQuoteResponse, fmtMoney, currencyLabel, currencyNoteText } = extract(["nightsSpan", "QUOTE_DECISIONS", "UNCONFIRMED", "isMoney", "fmtMoney", "CURRENCY_NAMES", "currencyLabel", "currencyNoteText", "parseQuoteResponse", "toCents", "parseDirectEstimate"]);
 const req = { id: 603564, from: "2026-11-16", to: "2026-11-19", guests: 2 };
 const quoted = { ok: true, available: true, decision: "quoted", listingId: 603564, from: "2026-11-16", to: "2026-11-19", nights: 3, guests: 2, currency: "MXN", total: 6600, nightlyAverage: 2200, breakdown: [{ type: "accommodation", label: "Accommodation", total: 6600 }], checkedAt: "2026-10-17T14:37:00Z", quoteBasis: "hostaway.priceDetails.v2", note: "Quote only. no inventory is held" };
 
@@ -24,5 +24,16 @@ test("25 malformed payloads are unconfirmed with no price", () => {
   for (const b of bad) { const x = parseQuoteResponse(b, b && b.guests === 3 ? { ...req, guests: 3 } : req); assert.equal(x.state, "unconfirmed", JSON.stringify(b).slice(0, 70)); assert.equal("total" in x, false); }
 });
 test("fmtMoney shows the backend currency only", () => {
-  assert.equal(fmtMoney(6600, "MXN"), "6,600 MXN"); assert.equal(fmtMoney(1439.5, "MXN"), "1,439.5 MXN"); assert.equal(fmtMoney(1760, "MXN").includes("$"), false);
+  assert.equal(fmtMoney(6600, "MXN"), "6,600 MXN"); assert.equal(fmtMoney(1760, "MXN").includes("$"), false);
+  // fractional amounts always show both cents (was "1,439.5 MXN")
+  assert.equal(fmtMoney(1439.5, "MXN"), "1,439.50 MXN"); assert.equal(fmtMoney(2133.333333, "MXN"), "2,133.33 MXN"); assert.equal(fmtMoney(125, "USD"), "125 USD");
+  assert.equal(fmtMoney(99.999, "USD"), "100 USD"); assert.equal(fmtMoney(0.5, "USD"), "0.50 USD");
+});
+test("currency notes come from the listings' own currencies; never assumed or converted", () => {
+  assert.equal(currencyLabel("MXN"), "Mexican pesos (MXN)"); assert.equal(currencyLabel("USD"), "US dollars (USD)"); assert.equal(currencyLabel("EUR"), "EUR");
+  for (const bad of [null, undefined, "", "usd", "US", 840]) assert.equal(currencyLabel(bad), null);
+  assert.equal(currencyNoteText([{ currency: "MXN" }, { currency: "MXN" }]), "Prices are shown in Mexican pesos (MXN).");
+  assert.equal(currencyNoteText([{ currency: "USD" }]), "Prices are shown in US dollars (USD).");
+  assert.equal(currencyNoteText([{ currency: "USD" }, { currency: "MXN" }, { currency: null }]), "Prices are shown in each property's own currency (MXN, USD); amounts are not converted.");
+  for (const none of [[], null, [{ currency: null }], [{ currency: "mxn" }]]) assert.equal(currencyNoteText(none), "Prices are shown in each property's listed currency.");
 });

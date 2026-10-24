@@ -47,7 +47,7 @@
     </div>
 <div id="availabilityStatus" style="margin-top:8px;font-weight:bold;"></div>
 <div id="availabilityPrice" style="margin-top:4px;"></div>
-<div id="mvCurrencyNote" style="margin-top:6px;font-size:12px;opacity:.75;">Prices are currently displayed in Mexican pesos (MXN).</div>
+<div id="mvCurrencyNote" style="margin-top:6px;font-size:12px;opacity:.75;">Prices are shown in each property's listed currency.</div>
 
     <div class="mv-subrow">
         <div id="mvMsg" class="mv-msg"></div>
@@ -1526,8 +1526,23 @@
     const UNCONFIRMED = (reason) => ({ state: "unconfirmed", reason });
     const isMoney = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
 
+    // Whole amounts keep no decimals ("6,600 MXN"); any fractional amount shows both cents ("1,439.50 MXN", not "1,439.5").
     function fmtMoney(amount, currency) {
-        return `${new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount)} ${currency}`;
+        const cents = Number.isInteger(Math.round(amount * 100) / 100) ? 0 : 2;
+        return `${new Intl.NumberFormat("en-US", { minimumFractionDigits: cents, maximumFractionDigits: 2 }).format(amount)} ${currency}`;
+    }
+    // Currency wording for notes. Display only: amounts are always shown in the backend's currency and never converted.
+    const CURRENCY_NAMES = Object.freeze({ MXN: "Mexican pesos (MXN)", USD: "US dollars (USD)" });
+    function currencyLabel(code) {
+        if (typeof code !== "string" || !/^[A-Z]{3}$/.test(code)) return null;
+        return CURRENCY_NAMES[code] || code;
+    }
+    /** Footer note under the search bar, from the currencies of the loaded listings (never assumed). */
+    function currencyNoteText(list) {
+        const codes = [...new Set((Array.isArray(list) ? list : []).map((p) => p && currencyLabel(p.currency) ? p.currency : null).filter(Boolean))].sort();
+        if (codes.length === 1) return `Prices are shown in ${currencyLabel(codes[0])}.`;
+        if (codes.length > 1) return `Prices are shown in each property's own currency (${codes.join(", ")}); amounts are not converted.`;
+        return "Prices are shown in each property's listed currency.";
     }
 
     /** Strictly validate a quote payload against the request it answers. Never throws. */
@@ -1823,6 +1838,7 @@
                 .map(toProperty)
                 .filter((p) => p && !seen.has(p.id) && seen.add(p.id));
             currentList = PROPERTIES;
+            const note = $("mvCurrencyNote"); if (note) note.textContent = currencyNoteText(PROPERTIES);
             renderWithFilters();
             updateSavedCount(false);
             if (!PROPERTIES.length) showInventoryMessage(UI_TEXT.loadFailed, { retry: true });
@@ -2233,7 +2249,7 @@
                              onerror="this.onerror=null;this.style.opacity=0.7;this.style.filter='grayscale(1)';">`
             : `<div class="mv-modal__img mv-card__noimg" role="img" aria-label="No photo available"></div>`;
         const modalNote = isHostaway
-            ? "Pick a check-in night and a check-out day on the calendar, then check the price. Prices come from the property management system and are currently displayed in Mexican pesos (MXN)."
+            ? `Pick a check-in night and a check-out day on the calendar, then check the price. Prices come from the property management system and are shown in ${currencyLabel(p.currency) || "the property's listed currency"}.`
             : "Live availability and pricing are not connected for this property.";
         const modalLink = p.url ? `<a class="mv-link" href="${esc(p.url)}" target="_blank" rel="noopener">Open full property page →</a>` : "";
         // U2: read-only live calendar for Hostaway listings (per-listing state, departure-exclusive).
