@@ -939,11 +939,15 @@
     // A–F3 merged to proxy DEV on 2026-10-18). Step B1 replaced the former
     // proxy feature-branch alias here; production hosts are untouched.
     const DEV_API = "https://maravilla-smoobu-proxy-git-dev-joel-goralskis-projects.vercel.app";
+    // C89: the ONE exact UI preview alias of branch mcd-catalog targets the proxy e7-test preview (migrated-listings catalog
+    // preview, read-only browse / calendar / quote). Exact host only; every other host keeps its mapping below.
+    const CATALOG_PREVIEW_API = "https://maravilla-smoobu-proxy-git-e7-test-joel-goralskis-projects.vercel.app";
     const API_ENVIRONMENTS = Object.freeze({
         "maravilla-booking-ui.vercel.app": PRODUCTION_API,
         "www.maravillanayarit.com": PRODUCTION_API,
         "maravillanayarit.com": PRODUCTION_API,
         "maravilla-booking-ui-git-dev-joel-goralskis-projects.vercel.app": DEV_API,
+        "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app": CATALOG_PREVIEW_API,
         "localhost": DEV_API,
         "127.0.0.1": DEV_API
     });
