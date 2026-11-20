@@ -47,7 +47,7 @@
     </div>
 <div id="availabilityStatus" style="margin-top:8px;font-weight:bold;"></div>
 <div id="availabilityPrice" style="margin-top:4px;"></div>
-<div id="mvCurrencyNote" style="margin-top:6px;font-size:12px;opacity:.75;">Prices are currently displayed in Mexican pesos (MXN).</div>
+<div id="mvCurrencyNote" style="margin-top:6px;font-size:12px;opacity:.75;">Prices are shown in each property's own currency.</div>
 
     <div class="mv-subrow">
         <div id="mvMsg" class="mv-msg"></div>
@@ -939,11 +939,15 @@
     // A–F3 merged to proxy DEV on 2026-10-18). Step B1 replaced the former
     // proxy feature-branch alias here; production hosts are untouched.
     const DEV_API = "https://maravilla-smoobu-proxy-git-dev-joel-goralskis-projects.vercel.app";
+    // C89: the ONE exact UI preview alias of branch mcd-catalog targets the proxy e7-test preview (migrated-listings catalog
+    // preview, read-only browse / calendar / quote). Exact host only; every other host keeps its mapping below.
+    const CATALOG_PREVIEW_API = "https://maravilla-smoobu-proxy-git-e7-test-joel-goralskis-projects.vercel.app";
     const API_ENVIRONMENTS = Object.freeze({
         "maravilla-booking-ui.vercel.app": PRODUCTION_API,
         "www.maravillanayarit.com": PRODUCTION_API,
         "maravillanayarit.com": PRODUCTION_API,
         "maravilla-booking-ui-git-dev-joel-goralskis-projects.vercel.app": DEV_API,
+        "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app": CATALOG_PREVIEW_API,
         "localhost": DEV_API,
         "127.0.0.1": DEV_API
     });
@@ -2233,7 +2237,7 @@
                              onerror="this.onerror=null;this.style.opacity=0.7;this.style.filter='grayscale(1)';">`
             : `<div class="mv-modal__img mv-card__noimg" role="img" aria-label="No photo available"></div>`;
         const modalNote = isHostaway
-            ? "Pick a check-in night and a check-out day on the calendar, then check the price. Prices come from the property management system and are currently displayed in Mexican pesos (MXN)."
+            ? "Pick a check-in night and a check-out day on the calendar, then check the price. Prices come from the property management system in this property's own currency."
             : "Live availability and pricing are not connected for this property.";
         const modalLink = p.url ? `<a class="mv-link" href="${esc(p.url)}" target="_blank" rel="noopener">Open full property page →</a>` : "";
         // U2: read-only live calendar for Hostaway listings (per-listing state, departure-exclusive).
