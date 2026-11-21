@@ -3122,7 +3122,7 @@
         guestSel.addEventListener("change", () => commitPanelGuests(p, guestSel));
         guestsDd.parentElement.appendChild(guestSel);
         const extra = document.createElement("div"); extra.className = "mv-panel__extra";
-        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = PANEL_TEXT.soon;
+        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = CHECKOUT_BASE ? "" : PANEL_TEXT.soon; note.hidden = !!CHECKOUT_BASE; // P4-2: no "opens soon" where Book now exists
         card.append(live, fields, statusBox, extra, note);
 
         const current = () => seq === panelSeq && panelLive() && card.isConnected;
