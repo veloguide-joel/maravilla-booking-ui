@@ -33,3 +33,16 @@ test("C89 exact catalog-preview host: ONLY the mcd-catalog UI alias targets the 
   ];
   for (const [h, e] of cases) assert.equal(resolveApiBase(h), e, h);
 });
+
+test("P4-2 Book now: checkout base only for the exact catalog-preview host; the link carries only validated values", () => {
+  const x = extract(["PRODUCTION_API", "DEV_API", "CATALOG_PREVIEW_API", "CHECKOUT_ENVIRONMENTS", "resolveCheckoutBase", "checkoutUrl"]);
+  assert.equal(x.resolveCheckoutBase("maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app"), x.CATALOG_PREVIEW_API);
+  for (const h of ["maravilla-booking-ui.vercel.app", "www.maravillanayarit.com", "maravilla-booking-ui-git-dev-joel-goralskis-projects.vercel.app", "localhost", "evil.example", "",
+    "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app.evil.com"]) assert.equal(x.resolveCheckoutBase(h), null, h);
+  const base = x.CATALOG_PREVIEW_API; const stay = { id: 606998, from: "2026-12-12", to: "2026-12-15", guests: 2, name: "Casa Uno & Dos" };
+  assert.equal(x.checkoutUrl(base, stay), `${base}/checkout.html?listing=606998&from=2026-12-12&to=2026-12-15&guests=2&name=Casa+Uno+%26+Dos`);
+  assert.equal(x.checkoutUrl(base, { ...stay, name: "<b>x" }), `${base}/checkout.html?listing=606998&from=2026-12-12&to=2026-12-15&guests=2`);
+  for (const bad of [{ ...stay, id: 0 }, { ...stay, id: "6 OR 1" }, { ...stay, from: "12/12/2026" }, { ...stay, to: "2026-12-12" }, { ...stay, guests: 0 }, { ...stay, guests: 99 }, null]) assert.equal(x.checkoutUrl(base, bad), null);
+  for (const b of [null, "", "http://insecure.example", "https://host/path", "javascript:alert(1)"]) assert.equal(x.checkoutUrl(b, stay), null, String(b));
+});
+
