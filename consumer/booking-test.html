@@ -779,6 +779,7 @@
     .mv-panel__row--save{ color: #15803d; }
     .mv-panel__row--total{ font-weight: 750; font-size: 15px; padding-top: 6px; border-top: 1px solid #eee; }
     .mv-panel__disclaimer{ font-size: 12.5px; color: #666; margin-top: 8px; line-height: 1.4; }
+    .mv-panel__book{ display: block; width: 100%; margin-top: 12px; text-align: center; text-decoration: none; box-sizing: border-box; }
     .mv-panel .mv-prop__note{ margin-top: 12px; padding-top: 10px; border-top: 1px solid #eee; font-size: 13px; }
     @media(max-width: 900px){
         .mv-prop__main, .mv-prop__aside{ grid-column: 1; grid-row: auto; }
@@ -960,6 +961,25 @@
         return null; // unknown host: fail safe
     }
     const API_BASE = resolveApiBase(window.location.hostname);
+    // P4-2: where "Book now" sends the guest. The checkout page lives on the proxy's own origin (the checkout API accepts only that
+    // origin). Explicit map, exact hosts only; a host without an entry shows NO Book now link (fail safe), as for the API above.
+    const CHECKOUT_ENVIRONMENTS = Object.freeze({
+        "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app": CATALOG_PREVIEW_API
+    });
+    function resolveCheckoutBase(hostname) {
+        return Object.prototype.hasOwnProperty.call(CHECKOUT_ENVIRONMENTS, hostname) ? CHECKOUT_ENVIRONMENTS[hostname] : null;
+    }
+    /** The checkout link for a server-confirmed stay, or null. Only validated values go into the URL; the server prices the stay again. */
+    function checkoutUrl(base, stay) {
+        if (typeof base !== "string" || !/^https:\/\/[a-z0-9.-]+$/.test(base) || !stay) return null;
+        const id = Number(stay.id), guests = Number(stay.guests);
+        if (!Number.isSafeInteger(id) || id <= 0 || !Number.isSafeInteger(guests) || guests < 1 || guests > 50) return null;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(stay.from) || !/^\d{4}-\d{2}-\d{2}$/.test(stay.to) || !(stay.to > stay.from)) return null;
+        const q = new URLSearchParams({ listing: String(id), from: stay.from, to: stay.to, guests: String(guests) });
+        if (typeof stay.name === "string" && /^[^\u0000-\u001f\u007f<>]{1,80}$/.test(stay.name.trim())) q.set("name", stay.name.trim());
+        return `${base}/checkout.html?${q.toString()}`;
+    }
+    const CHECKOUT_BASE = resolveCheckoutBase(window.location.hostname);
 
     // Inventory comes from the sanitized public listings endpoint (Hostaway is
     // the authoritative source; the former hard-coded Smoobu list is gone).
@@ -3102,7 +3122,7 @@
         guestSel.addEventListener("change", () => commitPanelGuests(p, guestSel));
         guestsDd.parentElement.appendChild(guestSel);
         const extra = document.createElement("div"); extra.className = "mv-panel__extra";
-        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = PANEL_TEXT.soon;
+        const note = document.createElement("div"); note.className = "mv-prop__note"; note.textContent = CHECKOUT_BASE ? "" : PANEL_TEXT.soon; note.hidden = !!CHECKOUT_BASE; // P4-2: no "opens soon" where Book now exists
         card.append(live, fields, statusBox, extra, note);
 
         const current = () => seq === panelSeq && panelLive() && card.isConnected;
@@ -3191,6 +3211,13 @@
             extra.appendChild(rows);
             const lead = d ? DIRECT_NOTE : (r.direct && r.direct.status === "estimate_unavailable" ? "A Book Direct savings estimate is not available for this stay; the standard price above applies." : "");
             extra.appendChild(el("div", "mv-panel__disclaimer", [lead, r.note || "Quote only — no inventory is held."].filter(Boolean).join(" ")));
+            // P4-2: Book now -- only for a stay the server just confirmed and priced, and only where a checkout is configured
+            const bookUrl = checkoutUrl(CHECKOUT_BASE, { id: p.id, from: seed.start, to: seed.end, guests, name: p.name });
+            if (bookUrl) {
+                const book = el("a", "mv-btn mv-btn--primary mv-panel__book", "Book now"); book.id = "mvPanelBook"; book.href = bookUrl; book.rel = "noopener";
+                extra.appendChild(book);
+                extra.appendChild(el("div", "mv-panel__disclaimer", "Taxes (16% IVA and 5% lodging tax) are added at checkout. You review the final total before paying."));
+            }
         })();
         return card;
     }
