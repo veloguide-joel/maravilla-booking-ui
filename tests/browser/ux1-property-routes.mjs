@@ -107,7 +107,7 @@ await T.done();
 T = await make();
 await T.go("/property/603566?checkin=2026-12-20&checkout=2026-12-24&guests=2");
 await T.page.click("#mvPropBack"); await T.page.waitForFunction(() => !document.getElementById("mv-app").classList.contains("mv-view-hidden")); s = await T.state();
-ok("D Back to results shows the search page at /?checkin&checkout&guests with inputs and date pill preserved", s.appVisible && !s.propVisible && s.path === "/?checkin=2026-12-20&checkout=2026-12-24&guests=2" && s.checkin === "2026-12-20" && /Dec 20/.test(s.datesBtn) && s.title === "maraVilla Booking Test", s);
+ok("D Back to results shows the search page at /?checkin&checkout&guests with inputs and date pill preserved", s.appVisible && !s.propVisible && s.path === "/?checkin=2026-12-20&checkout=2026-12-24&guests=2" && s.checkin === "2026-12-20" && /Dec 20/.test(s.datesBtn) && s.title === "MiCasaDirect — Book direct", s);
 ok("D cards intact after returning", same(s.cards, ["603564", "603566"]), s.cards);
 await T.page.goBack(); await T.page.waitForFunction(() => document.querySelector("#mvPropertyView h1")); s = await T.state();
 ok("D browser Back returns to the property page (focus on title)", s.propVisible && s.h1 === "East Side Studio" && s.focus === "mvPropTitle", s);

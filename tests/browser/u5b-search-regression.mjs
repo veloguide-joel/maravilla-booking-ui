@@ -98,7 +98,7 @@ s = await search("2026-11-20", "2026-11-23");
 ok("D unavailable+unconfirmed: not 'No availability'", s.status === "Availability could not be confirmed for these dates — try again", s);
 quoteOverride = (p) => p.id === "603566" ? { body: { ...quoteLive(p), currency: "USD", total: 300, nightlyAverage: 100, breakdown: [{ type: "accommodation", label: "Accommodation", total: 300 }] } } : null;
 s = await search("2026-11-20", "2026-11-23");
-ok("E mixed currency footer per currency", s.status === "Available · from 2,200 MXN/night · from 100 USD/night", s);
+ok("E mixed currency footer per currency", s.status === "Available · from 2,200 MXN/night · from $100.00/night", s);
 quoteOverride = (p) => ({ status: 200, body: { ok: true, available: true, decision: "quoted", listingId: Number(p.id), from: p.from, to: p.to, nights: 3, guests: 2, currency: "MXN", total: 6600, nightlyAverage: 2200, breakdown: [{ type: "accommodation", label: "Accommodation", total: 6000 }] , checkedAt: "", quoteBasis: "", note: "" } });
 s = await search("2026-11-20", "2026-11-23");
 ok("F breakdown mismatch -> unconfirmed (no price shown)", s.cards.every((c) => c.unconf && !c.sub.includes("MXN total")), s);

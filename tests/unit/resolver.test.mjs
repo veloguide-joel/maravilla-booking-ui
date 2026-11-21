@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { extract } from "../lib/page-source.mjs";
 
-const { resolveApiBase, PRODUCTION_API, DEV_API, CATALOG_PREVIEW_API } = extract(["PRODUCTION_API", "DEV_API", "CATALOG_PREVIEW_API", "API_ENVIRONMENTS", "PROJECT_PREVIEW_HOST", "resolveApiBase"]);
+const { resolveApiBase, PRODUCTION_API, DEV_API, CATALOG_PREVIEW_API } = extract(["PRODUCTION_API", "DEV_API", "CATALOG_PREVIEW_API", "MICASA_API", "API_ENVIRONMENTS", "PROJECT_PREVIEW_HOST", "resolveApiBase"]);
 
 test("API host mapping: production hosts, DEV/preview class, unknown hosts fail safe (B1 contract)", () => {
   assert.equal(PRODUCTION_API, "https://maravilla-smoobu-proxy.vercel.app");
@@ -35,7 +35,7 @@ test("C89 exact catalog-preview host: ONLY the mcd-catalog UI alias targets the 
 });
 
 test("P4-2 Book now: checkout base only for the exact catalog-preview host; the link carries only validated values", () => {
-  const x = extract(["PRODUCTION_API", "DEV_API", "CATALOG_PREVIEW_API", "CHECKOUT_ENVIRONMENTS", "resolveCheckoutBase", "checkoutUrl"]);
+  const x = extract(["PRODUCTION_API", "DEV_API", "CATALOG_PREVIEW_API", "MICASA_API", "CHECKOUT_ENVIRONMENTS", "resolveCheckoutBase", "checkoutUrl"]);
   assert.equal(x.resolveCheckoutBase("maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app"), x.CATALOG_PREVIEW_API);
   for (const h of ["maravilla-booking-ui.vercel.app", "www.maravillanayarit.com", "maravilla-booking-ui-git-dev-joel-goralskis-projects.vercel.app", "localhost", "evil.example", "",
     "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app.evil.com"]) assert.equal(x.resolveCheckoutBase(h), null, h);
@@ -44,5 +44,12 @@ test("P4-2 Book now: checkout base only for the exact catalog-preview host; the 
   assert.equal(x.checkoutUrl(base, { ...stay, name: "<b>x" }), `${base}/checkout.html?listing=606998&from=2026-12-12&to=2026-12-15&guests=2`);
   for (const bad of [{ ...stay, id: 0 }, { ...stay, id: "6 OR 1" }, { ...stay, from: "12/12/2026" }, { ...stay, to: "2026-12-12" }, { ...stay, guests: 0 }, { ...stay, guests: 99 }, null]) assert.equal(x.checkoutUrl(base, bad), null);
   for (const b of [null, "", "http://insecure.example", "https://host/path", "javascript:alert(1)"]) assert.equal(x.checkoutUrl(b, stay), null, String(b));
+});
+
+test("P4-5 MiCasaDirect production hosts: API and checkout on book.micasadirect.com; look-alikes fail safe", () => {
+  const x = extract(["PRODUCTION_API", "DEV_API", "CATALOG_PREVIEW_API", "MICASA_API", "API_ENVIRONMENTS", "PROJECT_PREVIEW_HOST", "resolveApiBase", "CHECKOUT_ENVIRONMENTS", "resolveCheckoutBase"]);
+  assert.equal(x.MICASA_API, "https://book.micasadirect.com");
+  for (const h of ["micasadirect.com", "www.micasadirect.com"]) { assert.equal(x.resolveApiBase(h), x.MICASA_API, h); assert.equal(x.resolveCheckoutBase(h), x.MICASA_API, h); }
+  for (const h of ["book.micasadirect.com", "micasadirect.com.evil.example", "xmicasadirect.com", "MICASADIRECT.COM"]) { assert.equal(x.resolveApiBase(h), null, h); assert.equal(x.resolveCheckoutBase(h), null, h); }
 });
 
