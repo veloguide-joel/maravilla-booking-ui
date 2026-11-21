@@ -25,4 +25,5 @@ test("25 malformed payloads are unconfirmed with no price", () => {
 });
 test("fmtMoney shows the backend currency only", () => {
   assert.equal(fmtMoney(6600, "MXN"), "6,600 MXN"); assert.equal(fmtMoney(1439.5, "MXN"), "1,439.5 MXN"); assert.equal(fmtMoney(1760, "MXN").includes("$"), false);
+  assert.equal(fmtMoney(1012.5, "USD"), "$1,012.50"); assert.equal(fmtMoney(100, "USD"), "$100.00"); assert.equal(fmtMoney(1125, "USD"), "$1,125.00");   // P4-5
 });
