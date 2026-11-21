@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>maraVilla Booking Test</title>
+    <title>MiCasaDirect — Book direct</title>
 </head>
 <body>
 
@@ -943,7 +943,11 @@
     // C89: the ONE exact UI preview alias of branch mcd-catalog targets the proxy e7-test preview (migrated-listings catalog
     // preview, read-only browse / calendar / quote). Exact host only; every other host keeps its mapping below.
     const CATALOG_PREVIEW_API = "https://maravilla-smoobu-proxy-git-e7-test-joel-goralskis-projects.vercel.app";
+    // P4-5: the MiCasaDirect production guest hosts use the booking system at book.micasadirect.com (APIs and checkout page).
+    const MICASA_API = "https://book.micasadirect.com";
     const API_ENVIRONMENTS = Object.freeze({
+        "micasadirect.com": MICASA_API,
+        "www.micasadirect.com": MICASA_API,
         "maravilla-booking-ui.vercel.app": PRODUCTION_API,
         "www.maravillanayarit.com": PRODUCTION_API,
         "maravillanayarit.com": PRODUCTION_API,
@@ -964,7 +968,9 @@
     // P4-2: where "Book now" sends the guest. The checkout page lives on the proxy's own origin (the checkout API accepts only that
     // origin). Explicit map, exact hosts only; a host without an entry shows NO Book now link (fail safe), as for the API above.
     const CHECKOUT_ENVIRONMENTS = Object.freeze({
-        "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app": CATALOG_PREVIEW_API
+        "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app": CATALOG_PREVIEW_API,
+        "micasadirect.com": MICASA_API,
+        "www.micasadirect.com": MICASA_API
     });
     function resolveCheckoutBase(hostname) {
         return Object.prototype.hasOwnProperty.call(CHECKOUT_ENVIRONMENTS, hostname) ? CHECKOUT_ENVIRONMENTS[hostname] : null;
@@ -1551,6 +1557,8 @@
     const isMoney = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
 
     function fmtMoney(amount, currency) {
+        // P4-5: US dollars read as guests expect ("$1,012.50"); any other currency keeps the explicit code form ("6,600 MXN")
+        if (currency === "USD") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
         return `${new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(amount)} ${currency}`;
     }
 
