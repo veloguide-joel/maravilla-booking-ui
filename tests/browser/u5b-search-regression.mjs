@@ -86,13 +86,13 @@ ok("guests 3: no cards, preserved footer", s.cards.length === 0 && s.status === 
 // --- injected states ---
 quoteOverride = (p) => p.id === "603564" ? { body: { ok: true, available: false, decision: "unavailable", listingId: 603564, from: p.from, to: p.to, nights: 3, guests: 2, currency: "MXN", reasons: [{ code: "NIGHT_UNAVAILABLE", message: "One or more selected nights are not available." }], checkedAt: new Date().toISOString() } } : null;
 s = await search("2026-11-20", "2026-11-23", 2);
-ok("A unavailable+quoted: hidden w/ subtitle, reason in msg", !s.cards[0].shown && s.cards[0].sub === "Not available for these dates" && s.msg.startsWith("Hacienda 5 De Mayo") && s.status === "Available · from 1,600 MXN/night", s);
+ok("A unavailable+quoted: hidden w/ subtitle, short count in msg", !s.cards[0].shown && s.cards[0].sub === "Not available for these dates" && /^1 of 2 properties available for these dates\.$/.test(s.msg) && s.status === "Available · from 1,600 MXN/night", s);
 quoteOverride = (p) => p.id === "603564" ? { status: 502, body: { ok: false, error: "AVAILABILITY_UNAVAILABLE" } } : null;
 s = await search("2026-11-20", "2026-11-24");
 ok("B unconfirmed+quoted: dimmed, footer note", s.cards[0].shown && s.cards[0].unconf && s.cards[0].sub === "Availability unknown — try again" && s.status.endsWith("some properties could not be checked") && s.msg === "1 property could not be checked — try again.", s);
 quoteOverride = (p) => ({ body: { ok: true, available: false, decision: "unavailable", listingId: Number(p.id), from: p.from, to: p.to, nights: 3, guests: 2, currency: "MXN", reasons: [{ code: "MIN_STAY", message: "Minimum stay not met." }], checkedAt: new Date().toISOString() } });
 s = await search("2026-11-20", "2026-11-23");
-ok("C all unavailable: both reasons, No availability", s.cards.every((c) => !c.shown && c.sub === "Not available for these dates") && s.status === "No availability for these dates" && s.msg.split(" · ").length === 2, s);
+ok("C all unavailable: short count, No availability", s.cards.every((c) => !c.shown && c.sub === "Not available for these dates") && s.status === "No availability for these dates" && s.msg === "0 of 2 properties available for these dates.", s);
 quoteOverride = (p) => p.id === "603564" ? { status: 502, body: { ok: false, error: "AVAILABILITY_UNAVAILABLE" } } : { body: { ok: true, available: false, decision: "unavailable", listingId: 603566, from: p.from, to: p.to, nights: 3, guests: 2, currency: "MXN", reasons: [{ code: "MIN_STAY", message: "Minimum stay not met." }], checkedAt: new Date().toISOString() } };
 s = await search("2026-11-20", "2026-11-23");
 ok("D unavailable+unconfirmed: not 'No availability'", s.status === "Availability could not be confirmed for these dates — try again", s);
