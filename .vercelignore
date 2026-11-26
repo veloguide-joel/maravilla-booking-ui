@@ -1,1 +1,8 @@
-tests/
+# Launch hygiene (2026-11-26): files kept in the repository but NOT deployed. Only the guest page is public.
+# The admin page called endpoints that no longer exist; the others are old drafts, references and test tooling.
+admin
+tools
+tests
+consumer/index.html
+consumer/home-page-search-reference.html
+consumer/shit burgers
