@@ -1713,40 +1713,55 @@
         u.appendChild(retry);
     }
 
-    /** Search bar: one quote per visible Hostaway card for the search dates/guests. */
+    /** P4-6: apply one parsed quote result to its card (called for every card together, once the whole search is back). */
+    function applyQuoteToCard(card, result) {
+        const subtitle = card.querySelector(".mv-card__meta span:last-child");
+        card.classList.remove("is-unconfirmed");
+        if (result.state === "quoted") {
+            card.style.display = "";
+            const d = result.direct && result.direct.status === "estimated" ? result.direct : null;
+            if (subtitle && d) {
+                subtitle.textContent = "";
+                subtitle.classList.add("mv-card__direct");
+                const main = document.createElement("strong"); main.className = "mv-card__directprice"; main.textContent = `${fmtMoney(d.estimatedTotal, d.currency)} est. direct total`;
+                const save = document.createElement("span"); save.className = "mv-card__directsave"; save.textContent = `Save ${fmtMoney(d.discount, d.currency)} (${directPctLabel(d.rateBps)}) · standard ${fmtMoney(d.standardTotal, d.currency)}`;
+                subtitle.append(main, save);
+            } else if (subtitle) {
+                subtitle.classList.remove("mv-card__direct");
+                subtitle.textContent = `from ${fmtMoney(result.nightlyAverage, result.currency)}/night · ${fmtMoney(result.total, result.currency)} total`;
+            }
+        } else if (result.state === "unavailable") {
+            card.style.display = "none";
+            if (subtitle) subtitle.classList.remove("mv-card__direct");
+            if (subtitle) subtitle.textContent = "Not available for these dates"; // never leave the transient "Checking…" behind (U5a)
+        } else {
+            card.style.display = "";
+            card.classList.add("is-unconfirmed");
+            if (subtitle) { subtitle.classList.remove("mv-card__direct"); subtitle.textContent = "Availability unknown — try again"; }
+        }
+    }
+
+    const SEARCH_QUOTE_CONCURRENCY = 4; // P4-6: a few quotes at a time; one at a time made a 28-listing search crawl
+    /** Search bar: one quote per visible Hostaway card for the search dates/guests. Quotes run a few at a time; the cards
+     *  change together at the end, so the guest sees one "Checking…" state and then the result (not cards vanishing one by one). */
     async function quoteHostawayCards(cards, checkIn, checkOut, guests, seq) {
         const results = new Map(); // id -> parsed result
-        for (const card of cards) {
-            if (seq !== searchSeq) return null; // superseded: stop, caller leaves the UI cleared
-            const id = Number(card.dataset.apartmentId);
-            const result = await fetchQuote({ id, from: checkIn, to: checkOut, guests });
-            if (seq !== searchSeq) return null;
-            results.set(id, result);
-            const subtitle = card.querySelector(".mv-card__meta span:last-child");
-            card.classList.remove("is-unconfirmed");
-            if (result.state === "quoted") {
-                card.style.display = "";
-                const d = result.direct && result.direct.status === "estimated" ? result.direct : null;
-                if (subtitle && d) {
-                    subtitle.textContent = "";
-                    subtitle.classList.add("mv-card__direct");
-                    const main = document.createElement("strong"); main.className = "mv-card__directprice"; main.textContent = `${fmtMoney(d.estimatedTotal, d.currency)} est. direct total`;
-                    const save = document.createElement("span"); save.className = "mv-card__directsave"; save.textContent = `Save ${fmtMoney(d.discount, d.currency)} (${directPctLabel(d.rateBps)}) · standard ${fmtMoney(d.standardTotal, d.currency)}`;
-                    subtitle.append(main, save);
-                } else if (subtitle) {
-                    subtitle.classList.remove("mv-card__direct");
-                    subtitle.textContent = `from ${fmtMoney(result.nightlyAverage, result.currency)}/night · ${fmtMoney(result.total, result.currency)} total`;
-                }
-            } else if (result.state === "unavailable") {
-                card.style.display = "none";
-                if (subtitle) subtitle.classList.remove("mv-card__direct");
-                if (subtitle) subtitle.textContent = "Not available for these dates"; // never leave the transient "Checking…" behind (U5a)
-            } else {
-                card.style.display = "";
-                card.classList.add("is-unconfirmed");
-                if (subtitle) { subtitle.classList.remove("mv-card__direct"); subtitle.textContent = "Availability unknown — try again"; }
+        let next = 0, done = 0, superseded = false;
+        async function worker() {
+            while (next < cards.length && !superseded) {
+                const id = Number(cards[next++].dataset.apartmentId);
+                let result;
+                try { result = await fetchQuote({ id, from: checkIn, to: checkOut, guests }); }
+                catch (_) { result = { state: "unconfirmed" }; }
+                if (seq !== searchSeq) { superseded = true; return; }
+                results.set(id, result);
+                done++;
+                $availabilityStatus.textContent = `Checking availability… ${done} of ${cards.length}`;
             }
         }
+        await Promise.all(Array.from({ length: Math.min(SEARCH_QUOTE_CONCURRENCY, cards.length) }, worker));
+        if (superseded || seq !== searchSeq) return null; // superseded: stop, caller leaves the UI cleared
+        for (const card of cards) applyQuoteToCard(card, results.get(Number(card.dataset.apartmentId)));
         return results;
     }
 
@@ -1755,11 +1770,9 @@
         const unavailable = [...results.entries()].filter(([, r]) => r.state === "unavailable");
         const unconfirmed = [...results.values()].filter((r) => r.state === "unconfirmed");
         // Visible results message: rejection reasons (hidden cards cannot show them) + unknown notice.
+        // P4-6: one short count, not a line per hidden property (each property's own page still says why it is unavailable).
         const parts = [];
-        unavailable.forEach(([id, r]) => {
-            const p = PROPERTIES.find((x) => Number(x.id) === Number(id));
-            parts.push(`${p ? p.name : id}: ${r.reasons.map((x) => x.message || x.code).join(" ")}`);
-        });
+        if (unavailable.length) parts.push(`${quoted.length} of ${results.size} properties available for these dates.`);
         if (unconfirmed.length) parts.push(`${unconfirmed.length} propert${unconfirmed.length === 1 ? "y" : "ies"} could not be checked — try again.`);
         $msg.textContent = parts.join(" · ");
         // Footer: minimum nightly per currency, never across currencies.
@@ -2363,7 +2376,7 @@
         const guests = $("mvGuests").value;
         lastSearchKey = `${checkIn}|${checkOut}|${guests}`; // UX6: remembered so later date changes can say results are outdated
         const allCards = Array.from($results.querySelectorAll(".mv-card"));
-        // U4: Hostaway cards get one server-validated quote each (sequential).
+        // U4: Hostaway cards get one server-validated quote each (P4-6: a few at a time).
         const hostawayCards = allCards.filter((card) => card.dataset.source === "hostaway");
         if (hostawayCards.length) {
             if (!checkIn || !checkOut) {
