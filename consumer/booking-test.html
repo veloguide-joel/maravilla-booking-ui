@@ -501,6 +501,9 @@
     .mv-card__title{ font-weight: 750; margin: 0 0 6px 0; }
     .mv-card__meta{ font-size: 13px; opacity: .78; display:flex; justify-content:space-between; gap:10px; }
     .mv-card__tag{ font-size: 12px; opacity:.7; margin-top: 6px; }
+    .mv-card__rating{ font-size: 12.5px; font-weight: 650; color:#1b1b1b; margin-top: 6px; }
+    .mv-prop__rating{ font-weight: 700; }
+    .mv-prop__ratingnote{ margin: -6px 0 14px; font-size: 12.5px; color:#666; }
 
     .mv-heart{
         position:absolute;
@@ -2295,6 +2298,7 @@
                         <span>${subtitle}</span>
                     </div>
                     <div class="mv-card__tag">${esc(p.tagline || "")}</div>
+                    ${airbnbRating(p.id) ? `<div class="mv-card__rating" title="${esc(airbnbRating(p.id).long)}">${esc(airbnbRating(p.id).short)}</div>` : ""}
                 </div>
             </div>
         `;
@@ -2711,6 +2715,41 @@
         sec.setAttribute("aria-labelledby", h2.id); sec.appendChild(h2);
         return sec;
     }
+    // ---- H4 (owner, 2026-11-27): each home's guest rating on Airbnb ----
+    // Read by the owner from the host's public Airbnb listings on the date below and matched to our listings by name.
+    // A string is the rating exactly as Airbnb showed it; "new" is Airbnb's own "New" label; a listing Airbnb showed without a rating is absent.
+    // Always shown with the words "on Airbnb". Update the values and the date together.
+    const AIRBNB_RATINGS_AS_OF = "November 2026";
+    const AIRBNB_RATINGS = Object.freeze({
+        628346: "4.9",  // Casa Victoria - Villa C
+        628372: "4.69", // Casa Victoria - Villa D
+        628373: "4.86", // Casita Adelaide - Main House
+        628374: "4.86", // Casita Adelaide - Upper Unit
+        628375: "5.0",  // Cuatro Estaciones - Unit #1
+        628376: "5.0",  // Casa Phemilia - Studio Guines
+        628377: "4.78", // Casa Victoria - Villa A
+        628384: "4.17", // Cuatro Estaciones - Unit #S6
+        628385: "4.6",  // Cuatro Estaciones - Unit #S12
+        628386: "4.88", // Private Pool! Casa Phemilia - V.Aquila
+        628388: "5.0",  // Casa Phemilia - Villa Mamaki
+        628389: "4.88", // Casa Phemilia - Studio Conejo (our "Studio Rabbit")
+        628390: "new",  // Hacienda 5 de Mayo - 1 Bedroom
+        628391: "new",  // Hacienda 5 de Mayo - Large Studio
+        628392: "new",  // Hacienda 5 de Mayo - Small Studio
+        628393: "4.52", // Las Vueltas - Unit B (2 bedroom unit)
+        628394: "4.85", // Las Vueltas - Unit B (1 bedroom)
+        628396: "5.0",  // Vista Victoria #201 - 2 Bedroom
+        628398: "5.0",  // Vista Victoria - Unit 201 - Studio
+        628400: "5.0"   // 360 Views - Vista Victoria #301
+    });
+    /** -> { short, long } | null. `short` goes on cards and pills; `long` is the full sentence for screen readers and the property page. */
+    function airbnbRating(id) {
+        const v = Object.prototype.hasOwnProperty.call(AIRBNB_RATINGS, Number(id)) ? AIRBNB_RATINGS[Number(id)] : null;
+        if (v === "new") return { short: "★ New on Airbnb", long: `Listed as New on Airbnb, as of ${AIRBNB_RATINGS_AS_OF}.` };
+        if (typeof v === "string" && /^[1-5](\.[0-9]{1,2})?$/.test(v)) return { short: `★ ${v} on Airbnb`, long: `Guest rating ${v} out of 5 on Airbnb, as of ${AIRBNB_RATINGS_AS_OF}.` };
+        return null;
+    }
+
     // ---- H3 (owner, 2026-11-27): "Meet your host" ----
     // Every figure here was read by the owner from the host's own Airbnb profile on the date in `asOf`; the card says so.
     // Update the numbers and the date together. `photo` and `whatsapp` are optional: without them the card shows an initial and e-mail only.
@@ -3016,7 +3055,10 @@
         if (p.bedrooms !== null) facts.appendChild(factPill(p.bedrooms === 0 ? "Studio" : `${p.bedrooms} bedroom${p.bedrooms === 1 ? "" : "s"}`));
         if (p.beds !== null) facts.appendChild(factPill(`${p.beds} bed${p.beds === 1 ? "" : "s"}`));
         if (p.bathrooms !== null) facts.appendChild(factPill(`${p.bathrooms} bath${p.bathrooms === 1 ? "" : "s"}`));
+        const ar = airbnbRating(p.id); // H4
+        if (ar) { const pill = factPill(ar.short); pill.id = "mvPropAirbnbRating"; pill.classList.add("mv-prop__rating"); facts.appendChild(pill); }
         main.appendChild(facts);
+        if (ar) { const src = document.createElement("p"); src.className = "mv-prop__ratingnote"; src.id = "mvPropAirbnbRatingNote"; src.textContent = ar.long; main.appendChild(src); }
         // Summary: unchanged UX1 behaviour (one paragraph, same text). No "About" section: `description` is null by
         // policy and the summary awaits the human-approval process, so nothing is added around it.
         if (p.summary) { const sum = document.createElement("p"); sum.className = "mv-prop__summary"; sum.textContent = p.summary; main.appendChild(sum); }
