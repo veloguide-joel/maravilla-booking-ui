@@ -19,6 +19,22 @@
     {
       "source": "/property/:id/",
       "destination": "/consumer/booking-test.html"
+    },
+    {
+      "source": "/guides/bucerias",
+      "destination": "/consumer/pages/bucerias.html"
+    },
+    {
+      "source": "/about/why-micasadirect",
+      "destination": "/consumer/pages/why-micasadirect.html"
+    },
+    {
+      "source": "/about/team",
+      "destination": "/consumer/pages/team.html"
+    },
+    {
+      "source": "/contact",
+      "destination": "/consumer/pages/contact.html"
     }
   ]
 }
