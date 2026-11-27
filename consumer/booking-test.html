@@ -9,7 +9,24 @@
 
 <!-- maraVilla Booking Test (Airbnb-lite) — v1.1 UI polish -->
 
+<!-- H1 (owner, 2026-11-26): the page says what MiCasaDirect is before it asks for dates. The top bar shows on every view. -->
+<header class="mv-top">
+    <a class="mv-top__brand" href="/">MiCasaDirect</a>
+    <span class="mv-top__note">Vacation rentals in Bucerías, booked direct</span>
+</header>
+
 <div id="mv-app" class="mv-app">
+    <section class="mv-intro" aria-labelledby="mvIntroTitle">
+        <h1 id="mvIntroTitle" class="mv-intro__title">Book your Bucerías stay directly with the owner</h1>
+        <p class="mv-intro__lead">MiCasaDirect is the direct-booking home of maraVilla Nayarit's vacation rentals in Bucerías, Mexico. You book with the people who own and look after the homes, with no booking-platform fees in between.</p>
+        <ul class="mv-intro__points">
+            <li><strong>10% off when you book direct</strong><span>The discount is applied automatically at checkout.</span></li>
+            <li><strong>Live calendars, full price up front</strong><span>What you see is available, and the total with taxes is shown before you pay.</span></li>
+            <li><strong>Secure card payment</strong><span>You pay on Stripe's secure page and get your confirmation by email.</span></li>
+        </ul>
+        <p class="mv-intro__ask">Choose your dates to see what is available. Questions? <a href="mailto:info@micasadirect.com">info@micasadirect.com</a></p>
+    </section>
+
     <div class="mv-search">
         <div class="mv-field mv-field--hidden">
             <label>Check-in</label>
@@ -142,6 +159,22 @@
         margin: 0 auto;
         padding: 10px 12px;
     }
+
+    /* H1: top bar + introduction */
+    .mv-top{ display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 16px; max-width:1120px; margin:0 auto; padding:14px 12px 6px;
+        font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    .mv-top__brand{ font-weight:700; font-size:1.35rem; color:#0d5c63; text-decoration:none; letter-spacing:.2px; }
+    .mv-top__note{ color:#5c5c5c; font-size:.9rem; }
+    .mv-intro{ margin: 4px 0 18px; }
+    .mv-intro__title{ font-size: clamp(1.5rem, 4.2vw, 2.1rem); line-height:1.2; margin: 6px 0 8px; color:#1b1b1b; }
+    .mv-intro__lead{ font-size:1.02rem; line-height:1.5; color:#333; margin:0 0 14px; max-width: 760px; }
+    .mv-intro__points{ list-style:none; margin:0 0 12px; padding:0; display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+    .mv-intro__points li{ border:1px solid #eee; border-radius:14px; padding:12px 14px; background:#fff; }
+    .mv-intro__points strong{ display:block; color:#0d5c63; margin-bottom:4px; }
+    .mv-intro__points span{ color:#444; font-size:.93rem; line-height:1.4; }
+    .mv-intro__ask{ color:#444; font-size:.95rem; margin:0; }
+    .mv-intro__ask a{ color:#0d5c63; }
+    @media (max-width: 720px){ .mv-intro__points{ grid-template-columns: 1fr; gap:8px; } }
 
     .mv-search{
         display: grid;
