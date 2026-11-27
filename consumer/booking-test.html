@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MiCasaDirect — Book direct</title>
+    <link rel="stylesheet" href="/consumer/site.css">
     <!-- Soft launch (owner, 2026-11-27): not promoted yet, so search engines are asked not to list the site. Remove this line when the owner says to open it up. -->
     <meta name="robots" content="noindex, nofollow">
 </head>
@@ -14,7 +15,12 @@
 <!-- H1 (owner, 2026-11-26): the page says what MiCasaDirect is before it asks for dates. The top bar shows on every view. -->
 <header class="mv-top">
     <a class="mv-top__brand" href="/">MiCasaDirect</a>
-    <span class="mv-top__note">Vacation rentals in Bucerías, booked direct</span>
+    <nav class="mv-nav" aria-label="Main">
+        <a href="/" aria-current="page">Stays</a>
+        <details class="mv-nav__menu"><summary>Local Guides</summary><div class="mv-nav__list"><a href="/guides/bucerias">Bucerías Guide</a></div></details>
+        <details class="mv-nav__menu"><summary>About Us</summary><div class="mv-nav__list"><a href="/about/why-micasadirect">Why MiCasaDirect</a><a href="/about/team">Meet the Team</a></div></details>
+        <a href="/contact">Contact Us</a>
+    </nav>
 </header>
 
 <div id="mv-app" class="mv-app">
@@ -173,10 +179,6 @@
     }
 
     /* H1: top bar + introduction */
-    .mv-top{ display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 16px; max-width:1120px; margin:0 auto; padding:14px 12px 6px;
-        font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
-    .mv-top__brand{ font-weight:700; font-size:1.35rem; color:#0d5c63; text-decoration:none; letter-spacing:.2px; }
-    .mv-top__note{ color:#5c5c5c; font-size:.9rem; }
     .mv-hero{ position:relative; border-radius:18px; overflow:hidden; margin: 6px 0 16px; height: clamp(260px, 46vh, 460px); background:#0d5c63; }
     .mv-hero picture, .mv-hero__img{ position:absolute; inset:0; width:100%; height:100%; }
     .mv-hero__img{ object-fit:cover; object-position: 50% 58%; display:block; }
