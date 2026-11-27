@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MiCasaDirect — Book direct</title>
+    <!-- Soft launch (owner, 2026-11-27): not promoted yet, so search engines are asked not to list the site. Remove this line when the owner says to open it up. -->
+    <meta name="robots" content="noindex, nofollow">
 </head>
 <body>
 
@@ -751,6 +753,7 @@
     .mv-host__photo{ width:96px; height:96px; border-radius:50%; object-fit:cover; display:block; margin:0 auto 8px; }
     .mv-host__photo--initial{ display:flex; align-items:center; justify-content:center; background:#0d5c63; color:#fff; font-size:2.4rem; font-weight:700; }
     .mv-host__name{ font-size:1.5rem; font-weight:700; line-height:1.1; }
+    .mv-host__cohost{ font-size:.95rem; color:#333; margin-top:3px; }
     .mv-host__badge{ font-size:.8rem; color:#555; margin-top:4px; }
     .mv-host__stats{ margin:0; display:grid; gap:8px; }
     .mv-host__stats > div{ padding-bottom:8px; border-bottom:1px solid #eee; } .mv-host__stats > div:last-child{ border-bottom:0; padding-bottom:0; }
@@ -2713,8 +2716,9 @@
     // Update the numbers and the date together. `photo` and `whatsapp` are optional: without them the card shows an initial and e-mail only.
     const HOST = Object.freeze({
         name: "Jillian",
+        coHost: "Joel",              // shown under the name as "Joel (co-host)"
         role: "maraVilla Nayarit",
-        photo: "/consumer/img/host-192.webp", photo2x: "/consumer/img/host-384.webp", photoAlt: "Your hosts",
+        photo: "/consumer/img/host-192.webp", photo2x: "/consumer/img/host-384.webp", photoAlt: "Jillian and Joel, your hosts",
         about: "13 years living in our sweet, magical town: Bucerías, Nayarit. Semi-retired and love to travel whenever we can!",
         airbnb: Object.freeze({ asOf: "November 2026", superhost: true, reviews: 547, rating: 4.83, yearsHosting: 11, responseRate: "100%", responseTime: "within an hour" }),
         email: "info@micasadirect.com",
@@ -2736,6 +2740,7 @@
         if (h.photo) { const img = document.createElement("img"); img.className = "mv-host__photo"; img.src = h.photo; if (h.photo2x) img.srcset = `${h.photo} 1x, ${h.photo2x} 2x`; img.alt = h.photoAlt || `${h.name}, your host`; img.width = 96; img.height = 96; img.loading = "lazy"; who.appendChild(img); }
         else { const av = document.createElement("div"); av.className = "mv-host__photo mv-host__photo--initial"; av.setAttribute("aria-hidden", "true"); av.textContent = h.name.slice(0, 1); who.appendChild(av); }
         const nm = document.createElement("div"); nm.className = "mv-host__name"; nm.textContent = h.name; who.appendChild(nm);
+        if (h.coHost) { const co = document.createElement("div"); co.className = "mv-host__cohost"; co.id = "mvHostCoHost"; co.textContent = `${h.coHost} (co-host)`; who.appendChild(co); }
         if (a.superhost) { const sh = document.createElement("div"); sh.className = "mv-host__badge"; sh.textContent = "Airbnb Superhost"; who.appendChild(sh); }
         const stats = document.createElement("dl"); stats.className = "mv-host__stats";
         [[a.reviews.toLocaleString("en-US"), "Reviews"], [a.rating.toFixed(2), "Rating"], [String(a.yearsHosting), "Years hosting"]].forEach(([v, k]) => {
