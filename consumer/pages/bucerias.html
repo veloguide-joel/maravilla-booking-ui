@@ -26,6 +26,16 @@
 <main class="mv-doc">
     <h1>Bucerías Guide</h1>
     <p class="mv-doc__lead">Bucerías is a beach town on Banderas Bay, in the Riviera Nayarit, a short drive north of Puerto Vallarta. It is big enough to have everything you need and small enough to walk. This is a short guide from people who live here.</p>
+    <section class="mv-video" aria-label="Featured video">
+        <h2>Watch: Bucerías with Joel</h2>
+        <p>Joel, your co-host, films the area on his YouTube channel, The Accidental Retiree. Start with this one, then browse the full playlist.</p>
+        <a class="mv-video__frame" id="mv-video" href="https://www.youtube.com/watch?v=c6bf8mi-gFY&amp;list=PL1cCphO1-0FgkGvHYqNuvCcEWYZa69I17" target="_blank" rel="noopener" data-video="c6bf8mi-gFY" data-list="PL1cCphO1-0FgkGvHYqNuvCcEWYZa69I17">
+            <img src="https://i.ytimg.com/vi/c6bf8mi-gFY/hqdefault.jpg" alt="Best Tacos in Bucerías? Chilango Tacos food review" loading="lazy" width="480" height="360" referrerpolicy="no-referrer">
+            <span class="mv-video__play" aria-hidden="true"></span>
+            <span class="mv-video__label">Play video</span>
+        </a>
+        <p class="mv-video__more"><a href="https://www.youtube.com/playlist?list=PL1cCphO1-0FgkGvHYqNuvCcEWYZa69I17" target="_blank" rel="noopener">Watch the full playlist on YouTube: What to Do in Puerto Vallarta &amp; Bucerías (Beyond the Tourist Traps)</a></p>
+    </section>
     <h2>The beach</h2>
     <p>The town runs along one long, wide sandy beach on the bay. The water is generally calm, which makes it good for swimming, paddleboarding and long walks, and sunsets over the bay are the daily event. In spring the afternoon wind picks up and the bay fills with kitesurfers.</p>
     <h2>The town</h2>
@@ -59,5 +69,18 @@
     <p><a class="mv-doc__cta" href="/">See available stays in Bucerías</a></p>
     <p class="mv-foot">MiCasaDirect · Bucerías, Nayarit, Mexico · <a href="/contact">Contact us</a> · <a href="/">See available stays</a></p>
 </main>
+<script>
+/* Click to play: YouTube is only loaded when the guest presses play. Without script the link simply opens YouTube. */
+(function(){
+    var a = document.getElementById("mv-video"); if (!a) return;
+    a.addEventListener("click", function(ev){
+        ev.preventDefault();
+        var f = document.createElement("iframe");
+        f.src = "https://www.youtube-nocookie.com/embed/" + a.dataset.video + "?list=" + a.dataset.list + "&autoplay=1&rel=0";
+        f.title = "Bucerías video"; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.allowFullscreen = true;
+        f.className = "mv-video__frame"; a.replaceWith(f);
+    });
+})();
+</script>
 </body>
 </html>
