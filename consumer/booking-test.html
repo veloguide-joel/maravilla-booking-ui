@@ -744,6 +744,21 @@
     .mv-prop__card .mv-prop__note{ border: 0; padding: 0; max-width: none; font-size: 14px; line-height: 1.45; opacity: .85; }
     .mv-prop__card .mv-prop__request{ margin: 0 0 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
     .mv-prop__section{ border-top: 1px solid #ebebeb; padding: 24px 0 4px; margin-top: 20px; }
+    /* H3: meet your host */
+    .mv-host{ display:grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 28px; align-items:start; }
+    .mv-host__card{ display:grid; grid-template-columns: 1fr auto; gap: 18px; align-items:center; border:1px solid #eee; border-radius:20px; padding:20px 22px; background:#fff; box-shadow: 0 8px 24px rgba(0,0,0,.07); }
+    .mv-host__who{ text-align:center; }
+    .mv-host__photo{ width:96px; height:96px; border-radius:50%; object-fit:cover; display:block; margin:0 auto 8px; }
+    .mv-host__photo--initial{ display:flex; align-items:center; justify-content:center; background:#0d5c63; color:#fff; font-size:2.4rem; font-weight:700; }
+    .mv-host__name{ font-size:1.5rem; font-weight:700; line-height:1.1; }
+    .mv-host__badge{ font-size:.8rem; color:#555; margin-top:4px; }
+    .mv-host__stats{ margin:0; display:grid; gap:8px; }
+    .mv-host__stats > div{ padding-bottom:8px; border-bottom:1px solid #eee; } .mv-host__stats > div:last-child{ border-bottom:0; padding-bottom:0; }
+    .mv-host__stats dd{ margin:0; font-size:1.3rem; font-weight:700; line-height:1.1; } .mv-host__stats dt{ font-size:.72rem; color:#555; }
+    .mv-host__about{ margin:0 0 10px; line-height:1.5; } .mv-host__facts{ margin:0 0 10px; color:#333; font-size:.95rem; }
+    .mv-host__source{ margin:0 0 14px; color:#666; font-size:.82rem; line-height:1.4; }
+    .mv-host__actions{ display:flex; flex-wrap:wrap; gap:10px; } .mv-host__actions a{ text-decoration:none; display:inline-block; }
+    @media (max-width: 760px){ .mv-host{ grid-template-columns: 1fr; gap:16px; } }
     .mv-prop__h2{ font-size: 20px; font-weight: 750; margin: 0 0 16px; line-height: 1.25; }
     .mv-amen{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; }
     .mv-amen__item{ display: flex; align-items: center; gap: 12px; font-size: 15px; line-height: 1.3; min-width: 0; }
@@ -2693,6 +2708,51 @@
         sec.setAttribute("aria-labelledby", h2.id); sec.appendChild(h2);
         return sec;
     }
+    // ---- H3 (owner, 2026-11-27): "Meet your host" ----
+    // Every figure here was read by the owner from the host's own Airbnb profile on the date in `asOf`; the card says so.
+    // Update the numbers and the date together. `photo` and `whatsapp` are optional: without them the card shows an initial and e-mail only.
+    const HOST = Object.freeze({
+        name: "Jillian",
+        role: "maraVilla Nayarit",
+        photo: null,                 // e.g. "/consumer/img/host.webp"
+        about: "13 years living in our sweet, magical town: Bucerías, Nayarit. Semi-retired and love to travel whenever we can!",
+        airbnb: Object.freeze({ asOf: "November 2026", superhost: true, reviews: 547, rating: 4.83, yearsHosting: 11, responseRate: "100%", responseTime: "within an hour" }),
+        email: "info@micasadirect.com",
+        whatsapp: null               // digits only with country code, e.g. "523221234567"
+    });
+    function hostContactLinks(host, propertyName) {
+        const q = `Hello, I have a question about ${propertyName} on MiCasaDirect.`;
+        const links = [];
+        if (typeof host.whatsapp === "string" && /^[1-9][0-9]{7,14}$/.test(host.whatsapp)) links.push({ id: "mvHostWhatsapp", label: "Message on WhatsApp", href: `https://wa.me/${host.whatsapp}?text=${encodeURIComponent(q)}`, external: true });
+        if (host.email) links.push({ id: "mvHostEmail", label: links.length ? "Email" : "Email your host", href: `mailto:${host.email}?subject=${encodeURIComponent(`Question about ${propertyName}`)}`, external: false });
+        return links;
+    }
+    function buildHost(p) {
+        const h = HOST, a = h.airbnb;
+        const sec = propSection("mvPropHost", "Meet your host");
+        const wrap = document.createElement("div"); wrap.className = "mv-host";
+        const card = document.createElement("div"); card.className = "mv-host__card";
+        const who = document.createElement("div"); who.className = "mv-host__who";
+        if (h.photo) { const img = document.createElement("img"); img.className = "mv-host__photo"; img.src = h.photo; img.alt = `${h.name}, your host`; img.width = 96; img.height = 96; img.loading = "lazy"; who.appendChild(img); }
+        else { const av = document.createElement("div"); av.className = "mv-host__photo mv-host__photo--initial"; av.setAttribute("aria-hidden", "true"); av.textContent = h.name.slice(0, 1); who.appendChild(av); }
+        const nm = document.createElement("div"); nm.className = "mv-host__name"; nm.textContent = h.name; who.appendChild(nm);
+        if (a.superhost) { const sh = document.createElement("div"); sh.className = "mv-host__badge"; sh.textContent = "Airbnb Superhost"; who.appendChild(sh); }
+        const stats = document.createElement("dl"); stats.className = "mv-host__stats";
+        [[a.reviews.toLocaleString("en-US"), "Reviews"], [a.rating.toFixed(2), "Rating"], [String(a.yearsHosting), "Years hosting"]].forEach(([v, k]) => {
+            const row = document.createElement("div"); const dd = document.createElement("dd"); dd.textContent = v; const dt = document.createElement("dt"); dt.textContent = k; row.append(dd, dt); stats.appendChild(row);
+        });
+        card.append(who, stats);
+        const text = document.createElement("div"); text.className = "mv-host__text";
+        const about = document.createElement("p"); about.className = "mv-host__about"; about.textContent = h.about; text.appendChild(about);
+        const facts = document.createElement("p"); facts.className = "mv-host__facts"; facts.textContent = `${h.role} · Response rate ${a.responseRate} · Usually responds ${a.responseTime}`; text.appendChild(facts);
+        const src = document.createElement("p"); src.className = "mv-host__source"; src.id = "mvHostSource";
+        src.textContent = `Reviews, rating, years hosting, Superhost status and response times are from ${h.name}'s host profile on Airbnb, as of ${a.asOf}.`; text.appendChild(src);
+        const actions = document.createElement("div"); actions.className = "mv-host__actions";
+        hostContactLinks(h, p.name).forEach((l, i) => { const el = document.createElement("a"); el.id = l.id; el.className = `mv-btn ${i === 0 ? "mv-btn--primary" : "mv-btn--ghost"}`; el.href = l.href; el.textContent = l.label; if (l.external) { el.target = "_blank"; el.rel = "noopener noreferrer"; } actions.appendChild(el); });
+        text.appendChild(actions);
+        wrap.append(card, text); sec.appendChild(wrap);
+        return sec;
+    }
     function buildAmenities(p) {
         const list = p.amenities, n = list.length;
         const sec = propSection("mvPropAmenities", "Amenities");
@@ -2958,6 +3018,7 @@
         if (p.amenities.length) main.appendChild(buildAmenities(p));
         const practical = buildPractical(p);
         if (practical) main.appendChild(practical);
+        main.appendChild(buildHost(p)); // H3
         aside.appendChild(buildBookingPanel(p)); // UX3 (replaces the UX1/UX2c request line + "opens soon" card)
         document.title = `${p.name} · ${baseTitle}`;
         if (focusTitlePending) { focusTitlePending = false; h1.focus(); }
