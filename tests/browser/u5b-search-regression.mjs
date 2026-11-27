@@ -73,7 +73,7 @@ let s = await snap();
 ok("U1 two cards, Hostaway, default subtitle", s.cards.length === 2 && s.cards.every((c) => c.sub === "Select dates to see price & availability"), s);
 ok("U1 images loaded", await page.evaluate(() => [...document.querySelectorAll(".mv-card img")].every((i) => i.complete && i.naturalWidth > 0)));
 ok("U1 no apartments panel in DOM", await page.evaluate(() => !document.querySelector(".mv-apartments, #mvApartmentsList, #mvApartmentsStatus")));
-ok("U5a currency note", (await $("mvCurrencyNote").textContent()) === "Prices are shown in each property's own currency.");
+ok("U5a currency note", (await $("mvCurrencyNote").textContent()) === "Prices are in US dollars.");
 // --- U4 live-shape search ---
 s = await search("2026-11-20", "2026-11-23", 2);
 ok("search 3n: 6,600 / 4,800, footer 1,600", s.cards[0].sub === "from 2,200 MXN/night · 6,600 MXN total" && s.cards[1].sub === "from 1,600 MXN/night · 4,800 MXN total" && s.status === "Available · from 1,600 MXN/night", s);

@@ -16,8 +16,18 @@
 </header>
 
 <div id="mv-app" class="mv-app">
-    <section class="mv-intro" aria-labelledby="mvIntroTitle">
-        <h1 id="mvIntroTitle" class="mv-intro__title">Book your Bucerías stay directly with the owner</h1>
+    <!-- H2 (owner's photo, 2026-11-26): hero image with the headline over it -->
+    <section class="mv-hero" aria-labelledby="mvIntroTitle">
+        <picture>
+            <source type="image/webp" srcset="/consumer/img/hero-pool-800.webp 800w, /consumer/img/hero-pool-1400.webp 1400w, /consumer/img/hero-pool-2400.webp 2400w" sizes="(max-width: 1144px) 100vw, 1120px">
+            <img class="mv-hero__img" src="/consumer/img/hero-pool-1600.jpg" width="1600" height="899" alt="Courtyard with two pools, palm trees and sun loungers at one of our homes in Bucerías" fetchpriority="high" decoding="async">
+        </picture>
+        <div class="mv-hero__text">
+            <h1 id="mvIntroTitle" class="mv-hero__title">Book your Bucerías stay directly with the owner</h1>
+            <p class="mv-hero__lead">Vacation homes in Bucerías, Mexico. No booking-platform fees, and 10% off when you book direct.</p>
+        </div>
+    </section>
+    <section class="mv-intro" aria-label="About MiCasaDirect">
         <p class="mv-intro__lead">MiCasaDirect is the direct-booking home of maraVilla Nayarit's vacation rentals in Bucerías, Mexico. You book with the people who own and look after the homes, with no booking-platform fees in between.</p>
         <ul class="mv-intro__points">
             <li><strong>10% off when you book direct</strong><span>The discount is applied automatically at checkout.</span></li>
@@ -64,7 +74,7 @@
     </div>
 <div id="availabilityStatus" style="margin-top:8px;font-weight:bold;"></div>
 <div id="availabilityPrice" style="margin-top:4px;"></div>
-<div id="mvCurrencyNote" style="margin-top:6px;font-size:12px;opacity:.75;">Prices are shown in each property's own currency.</div>
+<div id="mvCurrencyNote" style="margin-top:6px;font-size:12px;opacity:.75;">Prices are in US dollars.</div>
 
     <div class="mv-subrow">
         <div id="mvMsg" class="mv-msg"></div>
@@ -165,6 +175,15 @@
         font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
     .mv-top__brand{ font-weight:700; font-size:1.35rem; color:#0d5c63; text-decoration:none; letter-spacing:.2px; }
     .mv-top__note{ color:#5c5c5c; font-size:.9rem; }
+    .mv-hero{ position:relative; border-radius:18px; overflow:hidden; margin: 6px 0 16px; height: clamp(260px, 46vh, 460px); background:#0d5c63; }
+    .mv-hero picture, .mv-hero__img{ position:absolute; inset:0; width:100%; height:100%; }
+    .mv-hero__img{ object-fit:cover; object-position: 50% 58%; display:block; }
+    .mv-hero::after{ content:""; position:absolute; inset:0; background: linear-gradient(90deg, rgba(0,0,0,.62) 0%, rgba(0,0,0,.38) 42%, rgba(0,0,0,0) 78%), linear-gradient(0deg, rgba(0,0,0,.28), rgba(0,0,0,0) 45%); }
+    .mv-hero__text{ position:absolute; z-index:1; left:0; bottom:0; padding: 22px 26px; max-width: 620px; color:#fff; }
+    .mv-hero__title{ font-size: clamp(1.55rem, 4.4vw, 2.5rem); line-height:1.15; margin:0 0 8px; text-shadow: 0 1px 14px rgba(0,0,0,.45); }
+    .mv-hero__lead{ font-size: clamp(.98rem, 2.2vw, 1.12rem); line-height:1.45; margin:0; text-shadow: 0 1px 10px rgba(0,0,0,.5); }
+    @media (max-width: 720px){ .mv-hero{ height: clamp(240px, 42vh, 340px); border-radius:14px; } .mv-hero__text{ padding:16px; }
+        .mv-hero::after{ background: linear-gradient(0deg, rgba(0,0,0,.66) 0%, rgba(0,0,0,.3) 55%, rgba(0,0,0,.05) 100%); } }
     .mv-intro{ margin: 4px 0 18px; }
     .mv-intro__title{ font-size: clamp(1.5rem, 4.2vw, 2.1rem); line-height:1.2; margin: 6px 0 8px; color:#1b1b1b; }
     .mv-intro__lead{ font-size:1.02rem; line-height:1.5; color:#333; margin:0 0 14px; max-width: 760px; }
