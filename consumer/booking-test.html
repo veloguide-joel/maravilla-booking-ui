@@ -744,6 +744,8 @@
     .mv-prop__hero.mv-card__noimg{ height: auto; }
     .mv-prop__facts{ display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 12px; }
     .mv-prop__summary{ font-size: 15px; line-height: 1.5; margin: 0 0 16px; max-width: 70ch; }
+    .mv-prop__desc{ margin: 0 0 16px; } .mv-prop__desc .mv-prop__summary{ margin-bottom: 10px; }
+    .mv-prop__more{ background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: #1F4D3E; text-decoration: underline; cursor: pointer; }
     .mv-prop__note{ font-size: 13px; opacity: .8; border: 1px solid #eee; border-radius: 12px; padding: 10px 12px; max-width: 70ch; }
     .mv-prop__request{ font-size: 13px; opacity: .85; margin: 0 0 10px; }
     .mv-prop__empty{ padding: 24px 0; }
@@ -1134,6 +1136,7 @@
             sleeps,
             tagline: typeof l.tagline === "string" ? l.tagline : "",
             summary: typeof l.summary === "string" ? l.summary : "",
+            description: typeof l.description === "string" ? l.description : "", // D1: full text when the feed publishes it (plain text, lines split by \n)
             img: httpsUrl(l.img),
             images: galleryUrls(l), // UX2b: property-page gallery only (cards and the modal keep using `img`)
             currency: typeof l.currency === "string" ? l.currency : null,
@@ -3070,7 +3073,7 @@
         if (ar) { const src = document.createElement("p"); src.className = "mv-prop__ratingnote"; src.id = "mvPropAirbnbRatingNote"; src.textContent = ar.long; main.appendChild(src); }
         // Summary: unchanged UX1 behaviour (one paragraph, same text). No "About" section: `description` is null by
         // policy and the summary awaits the human-approval process, so nothing is added around it.
-        if (p.summary) { const sum = document.createElement("p"); sum.className = "mv-prop__summary"; sum.textContent = p.summary; main.appendChild(sum); }
+        if (p.summary || p.description) main.appendChild(buildDescription(p)); // D1
         if (p.amenities.length) main.appendChild(buildAmenities(p));
         const practical = buildPractical(p);
         if (practical) main.appendChild(practical);
@@ -3078,6 +3081,25 @@
         aside.appendChild(buildBookingPanel(p)); // UX3 (replaces the UX1/UX2c request line + "opens soon" card)
         document.title = `${p.name} · ${baseTitle}`;
         if (focusTitlePending) { focusTitlePending = false; h1.focus(); }
+    }
+    /** D1: the short summary, with "Read more" opening the full description when the feed has one that says more.
+     *  Text only (textContent); the full text is split into paragraphs on its line breaks. */
+    function buildDescription(p) {
+        const wrap = document.createElement("div"); wrap.className = "mv-prop__desc"; wrap.id = "mvPropDesc";
+        const short = document.createElement("p"); short.className = "mv-prop__summary"; short.textContent = p.summary || p.description;
+        wrap.appendChild(short);
+        const hasMore = !!p.description && !!p.summary && p.description.length > p.summary.length;
+        if (!hasMore) return wrap;
+        const full = document.createElement("div"); full.className = "mv-prop__full"; full.id = "mvPropDescFull"; full.hidden = true;
+        p.description.split("\n").forEach((line) => { const para = document.createElement("p"); para.className = "mv-prop__summary"; para.textContent = line; full.appendChild(para); });
+        const btn = document.createElement("button"); btn.type = "button"; btn.className = "mv-prop__more"; btn.id = "mvPropDescMore";
+        btn.textContent = "Read more"; btn.setAttribute("aria-expanded", "false"); btn.setAttribute("aria-controls", "mvPropDescFull");
+        btn.addEventListener("click", () => {
+            const open = full.hidden; full.hidden = !open; short.hidden = open;
+            btn.textContent = open ? "Show less" : "Read more"; btn.setAttribute("aria-expanded", String(open));
+        });
+        wrap.append(full, btn);
+        return wrap;
     }
     // ---- UX4b: property-page date editor = a second calendar host ----
     // Same calendar implementation as the modal (UX4a), different host: own ids (mvPdCal*), own listing identity
