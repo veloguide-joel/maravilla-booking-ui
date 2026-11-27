@@ -2714,11 +2714,11 @@
     const HOST = Object.freeze({
         name: "Jillian",
         role: "maraVilla Nayarit",
-        photo: null,                 // e.g. "/consumer/img/host.webp"
+        photo: "/consumer/img/host-192.webp", photo2x: "/consumer/img/host-384.webp", photoAlt: "Your hosts",
         about: "13 years living in our sweet, magical town: Bucerías, Nayarit. Semi-retired and love to travel whenever we can!",
         airbnb: Object.freeze({ asOf: "November 2026", superhost: true, reviews: 547, rating: 4.83, yearsHosting: 11, responseRate: "100%", responseTime: "within an hour" }),
         email: "info@micasadirect.com",
-        whatsapp: null               // digits only with country code, e.g. "523221234567"
+        whatsapp: "523221377495"     // digits only with country code (+52 322 137 7495)
     });
     function hostContactLinks(host, propertyName) {
         const q = `Hello, I have a question about ${propertyName} on MiCasaDirect.`;
@@ -2733,7 +2733,7 @@
         const wrap = document.createElement("div"); wrap.className = "mv-host";
         const card = document.createElement("div"); card.className = "mv-host__card";
         const who = document.createElement("div"); who.className = "mv-host__who";
-        if (h.photo) { const img = document.createElement("img"); img.className = "mv-host__photo"; img.src = h.photo; img.alt = `${h.name}, your host`; img.width = 96; img.height = 96; img.loading = "lazy"; who.appendChild(img); }
+        if (h.photo) { const img = document.createElement("img"); img.className = "mv-host__photo"; img.src = h.photo; if (h.photo2x) img.srcset = `${h.photo} 1x, ${h.photo2x} 2x`; img.alt = h.photoAlt || `${h.name}, your host`; img.width = 96; img.height = 96; img.loading = "lazy"; who.appendChild(img); }
         else { const av = document.createElement("div"); av.className = "mv-host__photo mv-host__photo--initial"; av.setAttribute("aria-hidden", "true"); av.textContent = h.name.slice(0, 1); who.appendChild(av); }
         const nm = document.createElement("div"); nm.className = "mv-host__name"; nm.textContent = h.name; who.appendChild(nm);
         if (a.superhost) { const sh = document.createElement("div"); sh.className = "mv-host__badge"; sh.textContent = "Airbnb Superhost"; who.appendChild(sh); }
