@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MiCasaDirect — Book direct</title>
+    <link rel="icon" type="image/svg+xml" href="/consumer/img/icon.svg">
     <link rel="stylesheet" href="/consumer/site.css">
     <!-- Soft launch (owner, 2026-11-27): not promoted yet, so search engines are asked not to list the site. Remove this line when the owner says to open it up. -->
     <meta name="robots" content="noindex, nofollow">
@@ -14,7 +15,10 @@
 
 <!-- H1 (owner, 2026-11-26): the page says what MiCasaDirect is before it asks for dates. The top bar shows on every view. -->
 <header class="mv-top">
-    <a class="mv-top__brand" href="/">MiCasaDirect</a>
+    <a class="mv-brand" href="/" aria-label="MiCasaDirect by maraVilla Nayarit, home">
+        <img class="mv-brand__mark" src="/consumer/img/logo-mark.svg" width="60" height="35" alt="">
+        <span class="mv-brand__text"><span class="mv-brand__name">MiCasa<span>Direct</span></span><span class="mv-brand__by">by <b>maraVilla</b> Nayarit</span></span>
+    </a>
     <nav class="mv-nav" aria-label="Main">
         <a href="/" aria-current="page">Stays</a>
         <details class="mv-nav__menu"><summary>Local Guides</summary><div class="mv-nav__list"><a href="/guides/bucerias">Bucerías Guide</a></div></details>
@@ -172,14 +176,14 @@
 
 <style>
     .mv-app{
-        font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+        font-family: "Montserrat",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
         max-width: 1120px;
         margin: 0 auto;
         padding: 10px 12px;
     }
 
     /* H1: top bar + introduction */
-    .mv-hero{ position:relative; border-radius:18px; overflow:hidden; margin: 6px 0 16px; height: clamp(260px, 46vh, 460px); background:#0d5c63; }
+    .mv-hero{ position:relative; border-radius:18px; overflow:hidden; margin: 6px 0 16px; height: clamp(260px, 46vh, 460px); background:#1F4D3E; }
     .mv-hero picture, .mv-hero__img{ position:absolute; inset:0; width:100%; height:100%; }
     .mv-hero__img{ object-fit:cover; object-position: 50% 58%; display:block; }
     .mv-hero::after{ content:""; position:absolute; inset:0; background: linear-gradient(90deg, rgba(0,0,0,.62) 0%, rgba(0,0,0,.38) 42%, rgba(0,0,0,0) 78%), linear-gradient(0deg, rgba(0,0,0,.28), rgba(0,0,0,0) 45%); }
@@ -188,15 +192,18 @@
     .mv-hero__lead{ font-size: clamp(.98rem, 2.2vw, 1.12rem); line-height:1.45; margin:0; text-shadow: 0 1px 10px rgba(0,0,0,.5); }
     @media (max-width: 720px){ .mv-hero{ height: clamp(240px, 42vh, 340px); border-radius:14px; } .mv-hero__text{ padding:16px; }
         .mv-hero::after{ background: linear-gradient(0deg, rgba(0,0,0,.66) 0%, rgba(0,0,0,.3) 55%, rgba(0,0,0,.05) 100%); } }
+    /* B1 (owner's final brand direction, 2026-11-27): Playfair Display for titles */
+    .mv-hero__title, .mv-prop__title, .mv-prop__h2, .mv-host__name{ font-family: "Playfair Display", Georgia, "Times New Roman", serif; letter-spacing: 0; }
+    .mv-intro__points li{ background:#fdfaf6; border-color:#eee4d6; }
     .mv-intro{ margin: 4px 0 18px; }
     .mv-intro__title{ font-size: clamp(1.5rem, 4.2vw, 2.1rem); line-height:1.2; margin: 6px 0 8px; color:#1b1b1b; }
     .mv-intro__lead{ font-size:1.02rem; line-height:1.5; color:#333; margin:0 0 14px; max-width: 760px; }
     .mv-intro__points{ list-style:none; margin:0 0 12px; padding:0; display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
     .mv-intro__points li{ border:1px solid #eee; border-radius:14px; padding:12px 14px; background:#fff; }
-    .mv-intro__points strong{ display:block; color:#0d5c63; margin-bottom:4px; }
+    .mv-intro__points strong{ display:block; color:#1F4D3E; margin-bottom:4px; }
     .mv-intro__points span{ color:#444; font-size:.93rem; line-height:1.4; }
     .mv-intro__ask{ color:#444; font-size:.95rem; margin:0; }
-    .mv-intro__ask a{ color:#0d5c63; }
+    .mv-intro__ask a{ color:#1F4D3E; }
     @media (max-width: 720px){ .mv-intro__points{ grid-template-columns: 1fr; gap:8px; } }
 
     .mv-search{
@@ -271,11 +278,11 @@
 
     .mv-btn--primary{
         border: 0;
-        background: #ff385c;
+        background: #A9552F;
         color: #fff;
         opacity: 1;
         cursor: pointer;
-        box-shadow: 0 10px 26px rgba(255,56,92,.18);
+        box-shadow: 0 10px 26px rgba(169,85,47,.18);
         transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
     }
     .mv-btn--primary:disabled{
@@ -286,7 +293,7 @@
     }
     .mv-btn--primary:hover{
         transform: translateY(-1px);
-        box-shadow: 0 14px 34px rgba(255,56,92,.26);
+        box-shadow: 0 14px 34px rgba(169,85,47,.26);
         filter: brightness(1.02);
     }
 
@@ -314,7 +321,7 @@
     .mv-btn--ghost:hover{ transform: translateY(-1px); }
     .mv-btn--ghost.is-active{
         border-color: #ffd6de;
-        background: #fff5f7;
+        background: #f8efe9;
     }
 
     .mv-subrow{
@@ -389,7 +396,7 @@
         margin: 8px 2px 10px 2px;
     }
     .mv-selected{
-        outline: 2px solid #ff385c;
+        outline: 2px solid #A9552F;
         outline-offset: 2px;
     }
     @media(max-width: 980px){
@@ -520,8 +527,8 @@
     }
     button.mv-heart{ font: inherit; color: inherit; line-height: 1; } /* UX7b1: the heart is a real button */
     .mv-heart:focus-visible{ outline: 2px solid #111; outline-offset: 2px; }
-    .mv-heart[data-on="1"]{ border-color:#ff385c; }
-    .mv-heart.is-saved{ color: #ff385c; }
+    .mv-heart[data-on="1"]{ border-color:#A9552F; }
+    .mv-heart.is-saved{ color: #A9552F; }
     .mv-heart.is-pulse{
         animation: mv-heart-pop .16s ease-out;
     }
@@ -656,12 +663,12 @@
     }
     .mv-cal__day.is-start,
     .mv-cal__day.is-end{
-        border-color: #ff385c;
-        background: #fff5f7;
+        border-color: #A9552F;
+        background: #f8efe9;
         font-weight:700;
     }
     .mv-cal__day.is-inrange{
-        background: #fff5f7;
+        background: #f8efe9;
     }
     /* U2: read-only Hostaway calendar inside the property modal */
     .mv-hcal{ margin-top: 12px; }
@@ -674,7 +681,7 @@
     .mv-hcal__nav{ margin: 6px 0 8px; }
     .mv-hcal .mv-calendar__range{ font-size: 13px; }
     .mv-hcal .mv-cal__day:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
-    .mv-hcal__selection .mv-btn[aria-pressed="true"]{ border-color:#ff385c; background:#fff5f7; }
+    .mv-hcal__selection .mv-btn[aria-pressed="true"]{ border-color:#A9552F; background:#f8efe9; }
     .mv-hcal button.mv-cal__day--hostaway{ cursor: pointer; font: inherit; }
     .mv-hcal button.mv-cal__day--hostaway.is-blocked,
     .mv-hcal button.mv-cal__day--hostaway.is-unknown{ cursor: pointer; } /* selectable as check-out; validation decides */
@@ -699,9 +706,9 @@
     .mv-card__directprice{ font-weight: 800; color: #111; }
     .mv-card__directsave{ font-size: 12px; color: #0f7a3d; font-weight: 600; }
     /* N2: property-modal selection — check-in filled, check-out outlined, occupied nights tinted (search picker styles untouched) */
-    .mv-cal__day--hostaway.is-inrange{ background: #ffe1e8; border-color: #ffe1e8; }
-    .mv-cal__day--hostaway.is-start{ background: #ff385c; border-color: #ff385c; color: #fff; font-weight: 700; }
-    .mv-cal__day--hostaway.is-end{ background: #fff; border: 2px solid #ff385c; color: #ff385c; font-weight: 700; }
+    .mv-cal__day--hostaway.is-inrange{ background: #f1dfd4; border-color: #f1dfd4; }
+    .mv-cal__day--hostaway.is-start{ background: #A9552F; border-color: #A9552F; color: #fff; font-weight: 700; }
+    .mv-cal__day--hostaway.is-end{ background: #fff; border: 2px solid #A9552F; color: #A9552F; font-weight: 700; }
     .mv-cal__day.is-blocked, .mv-hcal__swatch.is-blocked{
         background: #fde8ec;
         color: #b91c1c;
@@ -714,11 +721,11 @@
         border: 1px solid #e6e6e6;
     }
     /* N2: a check-out day whose night is blocked keeps the blocked look and only gains the check-out outline (departure-exclusive) */
-    .mv-cal__day--hostaway.is-blocked.is-end{ border: 2px solid #ff385c; }
+    .mv-cal__day--hostaway.is-blocked.is-end{ border: 2px solid #A9552F; }
     .mv-modal{ overflow: auto; } /* tall modal content (calendar) scrolls instead of being clipped */
     /* UX1: property view (presentation only; booking controls arrive in UX3/UX4) */
     .mv-view-hidden{ display: none !important; }
-    .mv-prop{ font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; max-width: 1120px; margin: 0 auto; padding: 10px 12px 40px; }
+    .mv-prop{ font-family: "Montserrat",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; max-width: 1120px; margin: 0 auto; padding: 10px 12px 40px; }
     .mv-prop__back{ display: inline-block; margin: 6px 0 14px; font-size: 14px; color: #222; text-decoration: none; border-bottom: 1px solid #ccc; }
     .mv-prop__back:focus-visible{ outline: 2px solid #222; outline-offset: 2px; }
     .mv-prop__title{ margin: 0 0 4px; font-size: 26px; font-weight: 800; line-height: 1.2; }
@@ -729,8 +736,8 @@
     .mv-prop__save:hover{ background: #f7f7f7; }
     .mv-prop__save:focus-visible{ outline: 2px solid #111; outline-offset: 2px; }
     .mv-prop__saveicon{ font-size: 18px; line-height: 1; }
-    .mv-prop__save.is-saved{ border-color: #ff385c; }
-    .mv-prop__save.is-saved .mv-prop__saveicon{ color: #ff385c; }
+    .mv-prop__save.is-saved{ border-color: #A9552F; }
+    .mv-prop__save.is-saved .mv-prop__saveicon{ color: #A9552F; }
     @media(max-width: 360px){ .mv-prop__save{ padding: 8px 10px; } }
     .mv-prop__where{ font-size: 15px; opacity: .8; margin-bottom: 14px; }
     .mv-prop__hero{ width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 18px; background: #f2f2f2; display: block; }
@@ -756,7 +763,7 @@
     .mv-host__card{ display:grid; grid-template-columns: 1fr auto; gap: 18px; align-items:center; border:1px solid #eee; border-radius:20px; padding:20px 22px; background:#fff; box-shadow: 0 8px 24px rgba(0,0,0,.07); }
     .mv-host__who{ text-align:center; }
     .mv-host__photo{ width:96px; height:96px; border-radius:50%; object-fit:cover; display:block; margin:0 auto 8px; }
-    .mv-host__photo--initial{ display:flex; align-items:center; justify-content:center; background:#0d5c63; color:#fff; font-size:2.4rem; font-weight:700; }
+    .mv-host__photo--initial{ display:flex; align-items:center; justify-content:center; background:#1F4D3E; color:#fff; font-size:2.4rem; font-weight:700; }
     .mv-host__name{ font-size:1.5rem; font-weight:700; line-height:1.1; }
     .mv-host__cohost{ font-size:.95rem; color:#333; margin-top:3px; }
     .mv-host__badge{ font-size:.8rem; color:#555; margin-top:4px; }
@@ -799,7 +806,7 @@
     .mv-panel__field dd button:focus-visible{ outline: 2px solid #222; outline-offset: 2px; border-radius: 6px; }
     .mv-panel__field--in:hover, .mv-panel__field--out:hover{ background: #f7f7f7; }
     .mv-panel__field dd button.is-empty{ color: #666; }
-    .mv-pdcal{ position: fixed; inset: 0; z-index: 10040; display: flex; align-items: flex-start; justify-content: center; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    .mv-pdcal{ position: fixed; inset: 0; z-index: 10040; display: flex; align-items: flex-start; justify-content: center; font-family: "Montserrat",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
     .mv-pdcal[hidden]{ display: none; }
     html.mv-pdcal-open{ overflow: hidden; }
     .mv-pdcal__backdrop{ position: absolute; inset: 0; background: rgba(0,0,0,.35); }
@@ -907,7 +914,7 @@
         .mv-gal[data-count="1"] .mv-gal__nav, .mv-gal[data-count="1"] .mv-gal__count{ display: none; }
     }
     /* UX2b: full-screen photo viewer */
-    .mv-gallery{ position: fixed; inset: 0; z-index: 10050; background: #111; color: #fff; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    .mv-gallery{ position: fixed; inset: 0; z-index: 10050; background: #111; color: #fff; font-family: "Montserrat",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
     .mv-gallery[hidden]{ display: none; }
     html.mv-gallery-open{ overflow: hidden; }
     .mv-gallery__panel{ height: 100%; display: flex; flex-direction: column; outline: none; }
