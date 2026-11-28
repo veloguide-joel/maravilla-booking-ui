@@ -56,3 +56,7 @@ body.mv-page{ margin:0; background:#fff; color:#1b1b1b; font-family: "Montserrat
 .mv-video__label{ position:absolute; left:14px; bottom:12px; padding:5px 10px; border-radius:8px; background:rgba(0,0,0,.6); color:#fff; font-size:.85rem; font-weight:600; }
 .mv-video__frame:hover .mv-video__play, .mv-video__frame:focus-visible .mv-video__play{ transform:scale(1.06); }
 .mv-video__more{ margin-top:10px; font-size:.95rem; }
+/* HS2: the one link for owners sits apart from the guest links, as an outlined button */
+.mv-nav > a.mv-nav__host{ margin-left:8px; padding:7px 14px; border:1.5px solid #1F4D3E; border-radius:999px; color:#1F4D3E; font-weight:600; }
+.mv-nav > a.mv-nav__host:hover{ background:#1F4D3E; color:#fff; }
+@media (max-width: 640px){ .mv-nav > a.mv-nav__host{ margin-left:0; } }
