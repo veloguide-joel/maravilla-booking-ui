@@ -39,6 +39,10 @@
     {
       "source": "/hosts",
       "destination": "/consumer/pages/hosts.html"
+    },
+    {
+      "source": "/manage",
+      "destination": "/consumer/pages/manage.html"
     }
   ],
   "headers": [

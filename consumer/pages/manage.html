@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage my booking · MiCasaDirect</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" type="image/svg+xml" href="/consumer/img/icon.svg">
+    <link rel="stylesheet" href="/consumer/site.css">
+    <!-- M2: "Manage booking" lives on the booking system (secure checkout host). This page only sends the guest there: the right host for
+         this deployment when known, otherwise the production one. No data is read or sent here. -->
+    <script>
+    (function () {
+        var HOSTS = { "micasadirect.com": "https://book.micasadirect.com", "www.micasadirect.com": "https://book.micasadirect.com",
+            "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app": "https://maravilla-smoobu-proxy-git-e7-test-joel-goralskis-projects.vercel.app" };
+        var base = Object.prototype.hasOwnProperty.call(HOSTS, window.location.hostname) ? HOSTS[window.location.hostname] : "https://book.micasadirect.com";
+        window.location.replace(base + "/manage.html");
+    })();
+    </script>
+</head>
+<body class="mv-page">
+<main class="mv-doc">
+    <h1>Manage my booking</h1>
+    <p>Taking you to your booking… If nothing happens, <a href="https://book.micasadirect.com/manage.html">open Manage my booking</a>.</p>
+</main>
+</body>
+</html>
