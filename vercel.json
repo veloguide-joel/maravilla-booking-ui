@@ -35,6 +35,10 @@
     {
       "source": "/contact",
       "destination": "/consumer/pages/contact.html"
+    },
+    {
+      "source": "/hosts",
+      "destination": "/consumer/pages/hosts.html"
     }
   ]
 }
