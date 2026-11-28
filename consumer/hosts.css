@@ -47,3 +47,4 @@
     .hs-form{ grid-template-columns:1fr; } .hs-band, .hs-who, .hs-join{ padding:24px 18px; } .hs-who img{ width:110px; height:110px; }
     .hs .mv-nav > a:not(.hs-btn){ display:none; }
 }
+.hs-faq a{ color:#1F4D3E; font-weight:600; }
