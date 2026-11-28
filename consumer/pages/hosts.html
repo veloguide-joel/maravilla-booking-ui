@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>List your property · MiCasaDirect</title>
     <meta name="description" content="Keep Airbnb and add a direct way to book. MiCasaDirect for vacation rental owners in Bucerías and the Bay of Banderas.">
-    <!-- Hosts page (owner-approved 2026-11-28). Not linked from the guest site yet and not indexed. INTERIM form: it opens the visitor's e-mail app
-         with a pre-filled message to info@micasadirect.com; stored sign-ups (database + automatic e-mail) replace this when the backend is ready. -->
+    <!-- Hosts page (owner-approved 2026-11-28). Not indexed. The form saves the sign-up through the booking system (POST /api/hosts/interest),
+         which stores it and notifies the owner; if that cannot be reached it falls back to opening a pre-filled e-mail to info@micasadirect.com. -->
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" type="image/svg+xml" href="/consumer/img/icon.svg">
     <link rel="stylesheet" href="/consumer/site.css">
@@ -112,28 +112,48 @@
             <label>Email <input type="email" name="email" autocomplete="email" required></label>
             <label>Where is the property? <input name="where" placeholder="For example: Bucerías, Nayarit"></label>
             <label>How many homes would you list?
-                <select name="homes"><option>1</option><option>2 to 4</option><option>5 or more</option></select></label>
+                <select name="homes"><option value="1">1</option><option value="2-4">2 to 4</option><option value="5+">5 or more</option></select></label>
             <label class="hs-form__wide">Airbnb listing link (optional) <input type="url" name="airbnb" placeholder="https://www.airbnb.com/rooms/…"></label>
-            <button type="submit" class="hs-btn">Join the interest list</button>
+            <label class="hs-form__trap" aria-hidden="true">Website <input name="website" tabindex="-1" autocomplete="off"></label>
+            <button type="submit" class="hs-btn" id="hs-submit">Join the interest list</button>
             <p id="hs-form-note" class="hs-form__note" role="status" hidden></p>
         </form>
         <p class="hs-small">We will only use your details to contact you about listing on MiCasaDirect.</p>
     </section>
 </main>
 <script>
-/* INTERIM sign-up: nothing is sent from this page. Submitting opens the visitor's own e-mail app with a message to info@micasadirect.com that
-   carries what they typed; they press send. Replaced by stored sign-ups when the backend is ready. */
+/* HS3: the sign-up is saved by the booking system, which also notifies the owner. Only the two known guest-site hosts have a backend; on
+   any other host, or if saving fails, the visitor's own e-mail app opens with a pre-filled message instead, so a sign-up is never lost. */
 (function () {
-    var form = document.getElementById("hs-form"), note = document.getElementById("hs-form-note");
+    var BACKENDS = { "micasadirect.com": "https://book.micasadirect.com", "www.micasadirect.com": "https://book.micasadirect.com",
+        "maravilla-booking-ui-git-mcd-catalog-joel-goralskis-projects.vercel.app": "https://maravilla-smoobu-proxy-git-e7-test-joel-goralskis-projects.vercel.app" };
+    var base = Object.prototype.hasOwnProperty.call(BACKENDS, window.location.hostname) ? BACKENDS[window.location.hostname] : null;
+    var form = document.getElementById("hs-form"), note = document.getElementById("hs-form-note"), btn = document.getElementById("hs-submit"), busy = false;
     var say = function (t) { note.textContent = t; note.hidden = false; };
+    function byEmail(v) {
+        var body = ["I would like to join the MiCasaDirect interest list for hosts.", "", "Name: " + v.name, "Email: " + v.email,
+            "Property location: " + (v.where || "-"), "Homes to list: " + v.homes, "Airbnb listing: " + (v.airbnb || "-")].join("\n");
+        window.location.href = "mailto:info@micasadirect.com?subject=" + encodeURIComponent("Host interest list: " + v.name) + "&body=" + encodeURIComponent(body);
+        say("We could not save your details just now, so your email app should open with them filled in. Press send to join the list, or write to info@micasadirect.com.");
+    }
     form.addEventListener("submit", function (ev) {
         ev.preventDefault();
-        var f = new FormData(form), v = function (k) { return String(f.get(k) || "").trim().slice(0, 300); };
-        if (!v("name") || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("email"))) return say("Please enter your name and a valid email address.");
-        var body = ["I would like to join the MiCasaDirect interest list for hosts.", "", "Name: " + v("name"), "Email: " + v("email"),
-            "Property location: " + (v("where") || "-"), "Homes to list: " + v("homes"), "Airbnb listing: " + (v("airbnb") || "-")].join("\n");
-        window.location.href = "mailto:info@micasadirect.com?subject=" + encodeURIComponent("Host interest list: " + v("name")) + "&body=" + encodeURIComponent(body);
-        say("Your email app should open with your details filled in. Press send to join the list. If nothing opens, write to info@micasadirect.com.");
+        if (busy) return;
+        var f = new FormData(form), g = function (k, max) { return String(f.get(k) || "").trim().slice(0, max); };
+        var v = { name: g("name", 120), email: g("email", 254), where: g("where", 200), homes: g("homes", 3), airbnb: g("airbnb", 500), website: g("website", 200) };
+        if (!v.name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email)) return say("Please enter your name and a valid email address.");
+        if (v.airbnb && !/^https:\/\/\S+$/.test(v.airbnb)) return say("Please paste the full Airbnb link, starting with https://, or leave it empty.");
+        if (!base) return byEmail(v);
+        busy = true; btn.disabled = true; btn.textContent = "Sending…"; note.hidden = true;
+        fetch(base + "/api/hosts/interest", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "omit", body: JSON.stringify(v) })
+            .then(function (r) {
+                if (r.status === 200) { form.reset(); btn.textContent = "Thank you"; return say("Thank you. You are on the list, and we will write to you before the first hosts join in March 2027."); }
+                busy = false; btn.disabled = false; btn.textContent = "Join the interest list";
+                if (r.status === 429) return say("Too many sign-ups from here just now. Please try again in an hour, or write to info@micasadirect.com.");
+                if (r.status === 400) return say("Please check your details and try again.");
+                byEmail(v);
+            })
+            .catch(function () { busy = false; btn.disabled = false; btn.textContent = "Join the interest list"; byEmail(v); });
     });
 })();
 </script>

@@ -48,3 +48,5 @@
     .hs .mv-nav > a:not(.hs-btn){ display:none; }
 }
 .hs-faq a{ color:#1F4D3E; font-weight:600; }
+.hs-form__trap{ position:absolute !important; left:-9999px; width:1px; height:1px; overflow:hidden; }
+.hs-form button[disabled]{ opacity:.75; cursor:default; }
