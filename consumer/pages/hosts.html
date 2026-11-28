@@ -106,7 +106,7 @@
 
     <section id="join" class="hs-join">
         <h2>Join the interest list</h2>
-        <p>Tell us a little about your property. There is no charge and no commitment.</p>
+        <p id="hs-join-intro">Tell us a little about your property. There is no charge and no commitment.</p>
         <form id="hs-form" class="hs-form" novalidate>
             <label>Your name <input name="name" autocomplete="name" required></label>
             <label>Email <input type="email" name="email" autocomplete="email" required></label>
@@ -118,7 +118,13 @@
             <button type="submit" class="hs-btn" id="hs-submit">Join the interest list</button>
             <p id="hs-form-note" class="hs-form__note" role="status" hidden></p>
         </form>
-        <p class="hs-small">We will only use your details to contact you about listing on MiCasaDirect.</p>
+        <p class="hs-small" id="hs-privacy">We will only use your details to contact you about listing on MiCasaDirect.</p>
+        <div id="hs-thanks" class="hs-thanks" role="status" tabindex="-1" hidden>
+            <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><circle cx="24" cy="24" r="22"/><path d="M14 24.5l7 7 13-14"/></svg>
+            <h3>You’re on the list.</h3>
+            <p>Thank you<span id="hs-thanks-name"></span>. We will write to you before the first hosts join in March 2027.</p>
+            <p><a href="/">See our homes</a></p>
+        </div>
     </section>
 </main>
 <script>
@@ -130,6 +136,15 @@
     var base = Object.prototype.hasOwnProperty.call(BACKENDS, window.location.hostname) ? BACKENDS[window.location.hostname] : null;
     var form = document.getElementById("hs-form"), note = document.getElementById("hs-form-note"), btn = document.getElementById("hs-submit"), busy = false;
     var say = function (t) { note.textContent = t; note.hidden = false; };
+    /* On success the form fades away and a thank-you block takes its place (no animation for visitors who ask for reduced motion). */
+    function thanks(name) {
+        var box = document.getElementById("hs-thanks"), intro = document.getElementById("hs-join-intro"), first = name.split(/\s+/)[0];
+        document.getElementById("hs-thanks-name").textContent = first ? ", " + first : "";
+        var swap = function () { form.hidden = true; if (intro) intro.hidden = true; document.getElementById("hs-privacy").hidden = true; box.hidden = false;
+            requestAnimationFrame(function () { box.classList.add("is-in"); }); box.focus(); };
+        form.reset(); form.classList.add("is-out");
+        window.setTimeout(swap, window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 350);
+    }
     function byEmail(v) {
         var body = ["I would like to join the MiCasaDirect interest list for hosts.", "", "Name: " + v.name, "Email: " + v.email,
             "Property location: " + (v.where || "-"), "Homes to list: " + v.homes, "Airbnb listing: " + (v.airbnb || "-")].join("\n");
@@ -147,7 +162,7 @@
         busy = true; btn.disabled = true; btn.textContent = "Sending…"; note.hidden = true;
         fetch(base + "/api/hosts/interest", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "omit", body: JSON.stringify(v) })
             .then(function (r) {
-                if (r.status === 200) { form.reset(); btn.textContent = "Thank you"; return say("Thank you. You are on the list, and we will write to you before the first hosts join in March 2027."); }
+                if (r.status === 200) return thanks(v.name);
                 busy = false; btn.disabled = false; btn.textContent = "Join the interest list";
                 if (r.status === 429) return say("Too many sign-ups from here just now. Please try again in an hour, or write to info@micasadirect.com.");
                 if (r.status === 400) return say("Please check your details and try again.");
