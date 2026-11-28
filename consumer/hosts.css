@@ -50,3 +50,9 @@
 .hs-faq a{ color:#1F4D3E; font-weight:600; }
 .hs-form__trap{ position:absolute !important; left:-9999px; width:1px; height:1px; overflow:hidden; }
 .hs-form button[disabled]{ opacity:.75; cursor:default; }
+.hs-form{ transition: opacity .35s ease, transform .35s ease; } .hs-form.is-out{ opacity:0; transform: translateY(-8px); pointer-events:none; }
+.hs-thanks{ margin-top:18px; padding:34px 28px; border-radius:16px; background:#fff; text-align:center; opacity:0; transform: translateY(10px); transition: opacity .4s ease, transform .4s ease; outline:0; }
+.hs-thanks.is-in{ opacity:1; transform:none; }
+.hs-thanks svg{ width:56px; height:56px; } .hs-thanks svg circle{ fill:#1F4D3E; } .hs-thanks svg path{ fill:none; stroke:#fff; stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }
+.hs .hs-thanks h3{ font-size:1.7rem; margin:12px 0 6px; } .hs .hs-thanks p{ color:#2b2b2b; margin:0 0 8px; } .hs-thanks a{ color:#A9552F; font-weight:600; }
+@media (prefers-reduced-motion: reduce){ .hs-form, .hs-thanks{ transition:none; } }
