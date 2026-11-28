@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>List your property · MiCasaDirect</title>
     <meta name="description" content="Keep Airbnb and add a direct way to book. MiCasaDirect for vacation rental owners in Bucerías and the Bay of Banderas.">
-    <!-- MOCK-UP for the owner's review (2026-11-28). Not linked from the guest site, not indexed, and the form is NOT connected. -->
+    <!-- Hosts page (owner-approved 2026-11-28). Not linked from the guest site yet and not indexed. INTERIM form: it opens the visitor's e-mail app
+         with a pre-filled message to info@micasadirect.com; stored sign-ups (database + automatic e-mail) replace this when the backend is ready. -->
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" type="image/svg+xml" href="/consumer/img/icon.svg">
     <link rel="stylesheet" href="/consumer/site.css">
@@ -75,9 +76,9 @@
         <img src="/consumer/img/host-384.webp" width="192" height="192" alt="Jillian and Joel" loading="lazy">
         <div>
             <h2>We are hosts first.</h2>
-            <p>MiCasaDirect was built for our own vacation rentals in Bucerías, and those homes take direct bookings on it today. We are opening the same system to a small group of other owners.</p>
+            <p>MiCasaDirect was built for our own vacation rentals in Bucerías. We are opening the same system to a small group of other owners.</p>
             <ul class="hs-facts">
-                <li><strong>28</strong> of our own homes on MiCasaDirect</li>
+                <li><strong>28</strong> of our own homes in Bucerías</li>
                 <li><strong>11 years</strong> hosting, Airbnb Superhost</li>
                 <li><strong>547</strong> Airbnb reviews, 4.83 average</li>
             </ul>
@@ -113,14 +114,27 @@
                 <select name="homes"><option>1</option><option>2 to 4</option><option>5 or more</option></select></label>
             <label class="hs-form__wide">Airbnb listing link (optional) <input type="url" name="airbnb" placeholder="https://www.airbnb.com/rooms/…"></label>
             <button type="submit" class="hs-btn">Join the interest list</button>
-            <p id="hs-form-note" class="hs-form__note" role="status" hidden>This page is a mock-up. The form is not connected yet, so nothing was sent.</p>
+            <p id="hs-form-note" class="hs-form__note" role="status" hidden></p>
         </form>
         <p class="hs-small">We will only use your details to contact you about listing on MiCasaDirect.</p>
     </section>
 </main>
 <script>
-/* Mock-up only: the form is not connected. Submitting shows a note and sends nothing. */
-document.getElementById("hs-form").addEventListener("submit", function (ev) { ev.preventDefault(); document.getElementById("hs-form-note").hidden = false; });
+/* INTERIM sign-up: nothing is sent from this page. Submitting opens the visitor's own e-mail app with a message to info@micasadirect.com that
+   carries what they typed; they press send. Replaced by stored sign-ups when the backend is ready. */
+(function () {
+    var form = document.getElementById("hs-form"), note = document.getElementById("hs-form-note");
+    var say = function (t) { note.textContent = t; note.hidden = false; };
+    form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var f = new FormData(form), v = function (k) { return String(f.get(k) || "").trim().slice(0, 300); };
+        if (!v("name") || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("email"))) return say("Please enter your name and a valid email address.");
+        var body = ["I would like to join the MiCasaDirect interest list for hosts.", "", "Name: " + v("name"), "Email: " + v("email"),
+            "Property location: " + (v("where") || "-"), "Homes to list: " + v("homes"), "Airbnb listing: " + (v("airbnb") || "-")].join("\n");
+        window.location.href = "mailto:info@micasadirect.com?subject=" + encodeURIComponent("Host interest list: " + v("name")) + "&body=" + encodeURIComponent(body);
+        say("Your email app should open with your details filled in. Press send to join the list. If nothing opens, write to info@micasadirect.com.");
+    });
+})();
 </script>
 </body>
 </html>
